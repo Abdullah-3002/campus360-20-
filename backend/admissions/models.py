@@ -1,0 +1,152 @@
+# admissions/models.py
+from django.db import models
+from django.conf import settings
+
+class Applicant(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='applicant_profile'
+    )
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    father_name = models.CharField(max_length=100, blank=True)
+    cnic = models.CharField(max_length=13, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    religion = models.CharField(max_length=50, blank=True)
+    nationality = models.CharField(max_length=50, default='Pakistani')
+    marital_status = models.CharField(max_length=20, blank=True)
+    perm_country = models.CharField(max_length=50, blank=True)
+    perm_state = models.CharField(max_length=50, blank=True)
+    perm_city = models.CharField(max_length=50, blank=True)
+    perm_address = models.TextField(blank=True)
+    emergency_name = models.CharField(max_length=100, blank=True)
+    emergency_relation = models.CharField(max_length=50, blank=True)
+    emergency_phone = models.CharField(max_length=20, blank=True)
+    guardian_name = models.CharField(max_length=100, blank=True)
+    guardian_cnic = models.CharField(max_length=13, blank=True)
+    guardian_relation = models.CharField(max_length=50, blank=True)
+    profile_image = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'admissions_applicant'
+
+    def __str__(self):
+        return f'{self.first_name} {self.last_name}'
+
+
+class AcademicRecord(models.Model):
+    GRADING_CHOICES = [('marks','Marks'),('cgpa','CGPA')]
+    applicant = models.ForeignKey(
+        Applicant, on_delete=models.CASCADE,
+        related_name='academic_records'
+    )
+    authority = models.CharField(max_length=200)
+    qualification_level = models.CharField(max_length=50)
+    qualification = models.CharField(max_length=200)
+    institute = models.CharField(max_length=200)
+    roll_number = models.CharField(max_length=20, blank=True)
+    start_year = models.IntegerField()
+    end_year = models.IntegerField()
+    grading_system = models.CharField(max_length=10, choices=GRADING_CHOICES, default='marks')
+    obtained = models.DecimalField(max_digits=7, decimal_places=2)
+    total = models.DecimalField(max_digits=7, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'admissions_academic_record'
+
+
+class AdmissionApplication(models.Model):
+    STATUS_CHOICES = [
+        ('pending','Pending'),
+        ('under_review','Under Review'),
+        ('approved','Approved'),
+        ('rejected','Rejected'),
+    ]
+    ADMISSION_TYPE_CHOICES = [
+        ('Regular','Regular'),
+        ('Lateral','Lateral'),
+        ('Migration','Migration'),
+    ]
+    applicant = models.ForeignKey(
+        Applicant, on_delete=models.CASCADE,
+        related_name='applications'
+    )
+    application_number = models.CharField(max_length=50, unique=True)
+    admission_type = models.CharField(max_length=20, choices=ADMISSION_TYPE_CHOICES, default='Regular')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'admissions_application'
+
+
+class ProgramPreference(models.Model):
+    application = models.ForeignKey(
+        AdmissionApplication, on_delete=models.CASCADE,
+        related_name='preferences'
+    )
+    program = models.CharField(max_length=200)
+    preference_order = models.CharField(max_length=30)
+    department = models.CharField(max_length=200, default='Faculty of Computing & IT')
+
+    class Meta:
+        db_table = 'admissions_program_preference'
+
+
+# ========== APPLICANT DOCUMENT MODEL ==========
+class ApplicantDocument(models.Model):
+    DOCUMENT_TYPES = [
+        # Personal Documents
+        ('cnic_front', 'CNIC Front'),
+        ('cnic_back', 'CNIC Back'),
+        ('domicile', 'Domicile'),
+        ('photograph', 'Photograph'),
+        # Academic Documents
+        ('matric_marksheet', 'Matric Marksheet'),
+        ('matric_certificate', 'Matric Certificate'),
+        ('inter_marksheet', 'Inter Marksheet'),
+        ('inter_certificate', 'Inter Certificate'),
+    ]
+    
+    document_id = models.AutoField(primary_key=True)
+    
+    # Foreign key to Applicant model - this will create applicant_id column
+    applicant = models.ForeignKey(
+        Applicant,
+        on_delete=models.CASCADE,
+        related_name='documents'
+    )
+    
+    document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPES)
+    file_name = models.CharField(max_length=255)
+    file_path = models.CharField(max_length=500)
+    file_size = models.IntegerField()
+    file_type = models.CharField(max_length=50)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_verified = models.BooleanField(default=False)
+    
+    # Foreign key to User who verified the document
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_documents',
+        db_column='verified_by'
+    )
+    
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verification_remarks = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'applicant_documents'
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.get_document_type_display()} - {self.applicant.user.username}"
