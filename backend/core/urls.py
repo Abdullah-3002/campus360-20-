@@ -8,6 +8,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('accounts.urls')),
     path('api/admissions/', include('admissions.urls')),
+    path('api/academics/', include('academics.urls')),
+    path('api/students/', include('students.urls')),
+    path('api/faculty/', include('faculty.urls')),
+    path('api/sections/', include('sections.urls')),
+    path('api/enrollments/', include('enrollments.urls')),
 ]
 
 # Serve media files during development

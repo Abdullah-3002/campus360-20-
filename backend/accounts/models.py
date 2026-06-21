@@ -115,14 +115,13 @@ class UserRole(models.Model):
 
 class Permission(models.Model):
     permission_id = models.AutoField(primary_key=True)
-    permission_name = models.CharField(max_length=100)
+    permission_name = models.CharField(max_length=100, unique=True)
     module_name = models.CharField(max_length=100)
     action_type = models.CharField(max_length=50)
     description = models.TextField(blank=True)
     
     class Meta:
         db_table = 'Permission'
-        unique_together = ['module_name', 'action_type']
 
 class RolePermission(models.Model):
     role_permission_id = models.AutoField(primary_key=True)
@@ -139,8 +138,8 @@ class AuditLog(models.Model):
     action_type = models.CharField(max_length=50)
     table_name = models.CharField(max_length=100)
     record_id = models.IntegerField(null=True)
-    old_value = models.TextField(null=True)
-    new_value = models.TextField(null=True)
+    old_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     

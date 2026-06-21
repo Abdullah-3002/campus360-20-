@@ -20,27 +20,20 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
         
-        if 'user_type' not in data or not data['user_type']:
-            data['user_type'] = 'student'
-
-        # Validate user_type
-        valid_types = ['student', 'teacher', 'staff', 'admin', 'applicant']
-        if data['user_type'] not in valid_types:
-            raise serializers.ValidationError({"user_type": "Invalid user type"})
-        
         return data
     
     def create(self, validated_data):
         validated_data.pop('confirm_password')
-        validated_data['user_type'] = 'applicant'
-        user = User.objects.create_user(**validated_data)
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            user_type='applicant',
+        )
         
         # Assign role based on user_type
-        try:
-            role = Role.objects.get(role_name=validated_data['user_type'].upper())
-            UserRole.objects.create(user=user, role=role)
-        except Role.DoesNotExist:
-            pass
+        role = Role.objects.get(role_name='Applicant')
+        UserRole.objects.create(user=user, role=role)
         
         return user
 

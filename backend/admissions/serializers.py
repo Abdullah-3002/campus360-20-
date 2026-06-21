@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Applicant, AcademicRecord, AdmissionApplication, ProgramPreference, ApplicantDocument
+from .models import ( 
+    Applicant, AcademicRecord, AdmissionApplication, ProgramPreference, 
+    ApplicantDocument, AdmissionDecision, AdmissionLog
+)
 
 class ApplicantSerializer(serializers.ModelSerializer):
     class Meta:
@@ -40,3 +43,14 @@ class ApplicantDocumentSerializer(serializers.ModelSerializer):
     def get_document_type_display(self, obj):
         return obj.get_document_type_display()
     
+class AdmissionDecisionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdmissionDecision
+        fields = '__all__'
+        read_only_fields = ['decision_id', 'decision_date', 'created_at']
+
+class AdmissionLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdmissionLog
+        fields = '__all__'
+        read_only_fields = ['log_id', 'timestamp']

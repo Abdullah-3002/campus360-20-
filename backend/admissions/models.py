@@ -1,6 +1,7 @@
 # admissions/models.py
 from django.db import models
 from django.conf import settings
+from academics.models import DegreeProgram
 
 class Applicant(models.Model):
     user = models.OneToOneField(
@@ -63,10 +64,13 @@ class AcademicRecord(models.Model):
 
 class AdmissionApplication(models.Model):
     STATUS_CHOICES = [
+        ('draft', 'Draft'),
         ('pending','Pending'),
         ('under_review','Under Review'),
         ('approved','Approved'),
         ('rejected','Rejected'),
+        ('waitlist', 'Waitlist'),
+        ('registered', 'Registered'),
     ]
     ADMISSION_TYPE_CHOICES = [
         ('Regular','Regular'),
@@ -75,6 +79,10 @@ class AdmissionApplication(models.Model):
     ]
     applicant = models.ForeignKey(
         Applicant, on_delete=models.CASCADE,
+        related_name='applications'
+    )
+    program = models.ForeignKey(
+        DegreeProgram, on_delete=models.RESTRICT,
         related_name='applications'
     )
     application_number = models.CharField(max_length=50, unique=True)
@@ -147,6 +155,67 @@ class ApplicantDocument(models.Model):
     class Meta:
         db_table = 'applicant_documents'
         ordering = ['-uploaded_at']
+        unique_together = ['applicant', 'document_type']
 
     def __str__(self):
         return f"{self.get_document_type_display()} - {self.applicant.user.username}"
+
+class AdmissionDecision(models.Model):
+        DECISION_CHOICES = [
+            ('approved', 'Approved'),
+            ('rejected', 'Rejected'),
+            ('waitlist', 'Waitlist'),
+        ]
+
+        decision_id = models.AutoField(primary_key=True)
+        application = models.OneToOneField(
+            AdmissionApplication, on_delete=models.RESTRICT,
+            related_name='decision'
+        )
+        decision = models.CharField(max_length=20, choices=DECISION_CHOICES)
+        decided_by = models.ForeignKey(
+            settings.AUTH_USER_MODEL, on_delete=models.RESTRICT,
+            related_name='admission_decisions'
+        )
+        decision_date = models.DateField(auto_now_add=True)
+        remarks = models.TextField(null=True, blank=True)
+        registration_deadline = models.DateField(null=True, blank=True)
+        offered_section = models.CharField(max_length=20, null=True, blank=True)
+        rejection_reason = models.TextField(null=True, blank=True)
+        merit_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+        merit_position = models.IntegerField(null=True, blank=True)
+        created_at = models.DateTimeField(auto_now_add=True)
+
+        class Meta:
+            db_table = 'admissions_decision'
+
+class AdmissionLog(models.Model):
+    ACTION_CHOICES = [
+        ('created', 'Created'),
+        ('submitted', 'Submitted'),
+        ('reviewed', 'Reviewed'),
+        ('documents_verified', 'Documents Verified'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('waitlisted', 'Waitlisted'),
+        ('registered', 'Registered'),
+    ]
+
+    log_id = models.AutoField(primary_key=True)
+    application = models.ForeignKey(
+        AdmissionApplication, on_delete=models.CASCADE,
+        related_name='logs'
+    )
+    action_type = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.RESTRICT,
+        related_name='admission_logs'
+    )
+    previous_status = models.CharField(max_length=30, null=True, blank=True)
+    new_status = models.CharField(max_length=30, null=True, blank=True)
+    remarks = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'admissions_log'

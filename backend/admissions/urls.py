@@ -8,11 +8,11 @@ urlpatterns = [
     # Academic Records URLs
     path('academic/', views.add_academic_record, name='add-academic'),
     path('academic/list/', views.get_academic_records, name='academic-list'),
-        path('academic/<int:record_id>/', views.delete_academic_record, name='delete-academic-record'),
+    path('academic/<int:record_id>/', views.delete_academic_record, name='delete-academic-record'),
     
     # Application URLs
     path('application/', views.admission_application, name='application'),
-        path('application/<int:app_id>/', views.delete_application, name='delete-application'),
+    path('application/<int:app_id>/', views.delete_application, name='delete-application'),
     
     # ========== ADD THESE DOCUMENT URLs ==========
     path('documents/', views.get_my_documents, name='get-documents'),
