@@ -19,4 +19,9 @@ urlpatterns = [
     path('documents/upload/', views.upload_document, name='upload-document'),
     path('documents/<int:doc_id>/', views.delete_document, name='delete-document'),
     path('documents/<int:doc_id>/download/', views.download_document, name='download-document'),
+
+     # Applications — admin
+    path('admin/applications/',                                         views.admin_list_applications,      name='admin-applications'),
+    path('admin/applications/<int:application_id>/decide/',             views.make_decision,                name='make-decision'),
+    path('admin/applications/<int:application_id>/confirm-registration/', views.confirm_student_registration, name='confirm-registration'),
 ]

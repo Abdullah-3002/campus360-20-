@@ -67,10 +67,16 @@ class AdmissionApplication(models.Model):
         ('draft', 'Draft'),
         ('pending','Pending'),
         ('under_review','Under Review'),
+        ('documents_pending', 'Documents Pending'),
         ('approved','Approved'),
         ('rejected','Rejected'),
         ('waitlist', 'Waitlist'),
         ('registered', 'Registered'),
+    ]
+    SESSION_TYPE_CHOICES = [
+        ('spring', 'Spring'),
+        ('fall', 'Fall'),
+        ('summer', 'Summer'),
     ]
     ADMISSION_TYPE_CHOICES = [
         ('Regular','Regular'),
@@ -87,8 +93,14 @@ class AdmissionApplication(models.Model):
     )
     application_number = models.CharField(max_length=50, unique=True)
     admission_type = models.CharField(max_length=20, choices=ADMISSION_TYPE_CHOICES, default='Regular')
+    session_year = models.IntegerField(null=True, blank=True)
+    session_type = models.CharField(max_length=20, choices=SESSION_TYPE_CHOICES, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    is_fee_paid = models.BooleanField(default=False)
+    is_eligible = models.BooleanField(null=True, blank=True)
+    is_documents_verified = models.BooleanField(default=False)
     submitted_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'admissions_application'
@@ -99,9 +111,12 @@ class ProgramPreference(models.Model):
         AdmissionApplication, on_delete=models.CASCADE,
         related_name='preferences'
     )
-    program = models.CharField(max_length=200)
-    preference_order = models.CharField(max_length=30)
-    department = models.CharField(max_length=200, default='Faculty of Computing & IT')
+    program = models.ForeignKey(
+        'academics.DegreeProgram',
+        on_delete=models.RESTRICT,
+        related_name='preferences'
+    )
+    preference_order = models.IntegerField()
 
     class Meta:
         db_table = 'admissions_program_preference'
@@ -146,7 +161,6 @@ class ApplicantDocument(models.Model):
         null=True,
         blank=True,
         related_name='verified_documents',
-        db_column='verified_by'
     )
     
     verified_at = models.DateTimeField(null=True, blank=True)
