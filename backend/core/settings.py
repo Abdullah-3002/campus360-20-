@@ -46,6 +46,11 @@ INSTALLED_APPS = [
     'faculty',
     'sections',
     'enrollments',
+    'examinations',
+    'attendance',
+    'fees',
+    'complaints',
+    'notifications',
 ]
 
 MIDDLEWARE = [
