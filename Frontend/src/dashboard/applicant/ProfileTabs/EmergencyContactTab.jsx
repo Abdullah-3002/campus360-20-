@@ -5,7 +5,7 @@ import { saveApplicantProfile, prepareProfileForBackend } from '../../../service
 import { UserIcon, PhoneIcon } from '../../Icons';
 import { getNameError, getPhoneError } from '../../../utils/validation';
 
-const EmergencyContactTab = ({ profileData, updateProfile }) => {
+const EmergencyContactTab = ({ profileData, updateProfile, readOnly = false }) => {
     const { token } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
@@ -97,7 +97,7 @@ const EmergencyContactTab = ({ profileData, updateProfile }) => {
     };
 
     return (
-        <div className="tab-content-area fade-in">
+        <div className="tab-content-area fade-in" style={readOnly ? { pointerEvents: 'none', opacity: 0.92 } : undefined}>
             <div className="form-card">
                 <div className="section-header">
                     <div className="section-header-icon"><UserIcon /></div>
@@ -170,14 +170,16 @@ const EmergencyContactTab = ({ profileData, updateProfile }) => {
                     {touched.phone && errors.phone && (
                         <div className="error-message">{errors.phone}</div>
                     )}
-                    <p className="helper-text">Enter 10-digit phone number after +92 (e.g., 3001234567)</p>
+                    <p className="helper-text">Enter 11-digit phone number (e.g., 03001234567)</p>
                 </div>
             </div>
 
             <div className="form-actions">
+                {!readOnly && (
                 <button className="btn-save" onClick={handleSubmit} disabled={isSubmitting}>
                     {isSubmitting ? 'Saving...' : 'Submit Details'}
                 </button>
+                )}
             </div>
         </div>
     );

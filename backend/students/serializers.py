@@ -20,7 +20,7 @@ class StudentSerializer(serializers.ModelSerializer):
         fields = [
             'student_id', 'registration_number', 'batch_year',
             'admission_date', 'current_semester', 'status',
-            'cgpa', 'total_credit_hours_completed',
+            'cgpa', 'total_credit_hours_completed', 'section',
             'program_name', 'program_code',
             'email', 'username',
             'profile', 'created_at', 'updated_at',

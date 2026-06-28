@@ -7,4 +7,11 @@ urlpatterns = [
     path('me/', views.get_my_sections, name='my-sections'),
     path('<int:section_id>/', views.section_detail, name='section-detail'),
     path('<int:section_id>/schedules/', views.add_schedule, name='add-schedule'),
+    
+    # Batch Sections
+    path('batch/', views.manage_batch_sections, name='manage-batch-sections'),
+    path('batch/<int:batch_section_id>/', views.delete_batch_section, name='delete-batch-section'),
+    
+    # Section Students
+    path('<int:section_id>/students/', views.get_section_students, name='section-students'),
 ]

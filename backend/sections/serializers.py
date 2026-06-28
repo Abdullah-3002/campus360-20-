@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Section, SectionSchedule
+from .models import Section, SectionSchedule, BatchSection
 
 
 class SectionScheduleSerializer(serializers.ModelSerializer):
@@ -29,3 +29,13 @@ class SectionCreateSerializer(serializers.ModelSerializer):
             'course', 'semester', 'faculty', 'section_name',
             'section_type', 'max_capacity', 'is_active',
         ]
+
+
+class BatchSectionSerializer(serializers.ModelSerializer):
+    program_name = serializers.CharField(source='program.program_name', read_only=True)
+    program_code = serializers.CharField(source='program.program_code', read_only=True)
+
+    class Meta:
+        model = BatchSection
+        fields = '__all__'
+        read_only_fields = ['batch_section_id', 'created_at']

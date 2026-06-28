@@ -47,7 +47,7 @@ const SignupPage = ({ setView }) => {
 
     const handlePhoneChange = (e) => {
         const value = e.target.value;
-        const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+        const digitsOnly = value.replace(/\D/g, '').slice(0, 11);
         setFormData({...formData, phone: digitsOnly});
     };
 
@@ -275,7 +275,7 @@ const SignupPage = ({ setView }) => {
                                     {submitErrors.phone && (
                                         <p style={{ color: 'red', fontSize: '12px', marginTop: '5px' }}>{submitErrors.phone}</p>
                                     )}
-                                    <p className="helper-text">Enter 10 digits after +92 (e.g., 3001234567)</p>
+                                    <p className="helper-text">Enter 11 digits (e.g., 03001234567)</p>
                                 </div>
 
                                 {/* Username */}

@@ -5,7 +5,7 @@ import { saveApplicantProfile, prepareProfileForBackend } from '../../../service
 import { UserIcon, ShieldIcon } from '../../Icons';
 import { getNameError, getCNICError } from '../../../utils/validation';
 
-const GuardianDetailsTab = ({ profileData, updateProfile }) => {
+const GuardianDetailsTab = ({ profileData, updateProfile, readOnly = false }) => {
     const { token } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
@@ -97,7 +97,7 @@ const GuardianDetailsTab = ({ profileData, updateProfile }) => {
     };
 
     return (
-        <div className="tab-content-area fade-in">
+        <div className="tab-content-area fade-in" style={readOnly ? { pointerEvents: 'none', opacity: 0.92 } : undefined}>
             <div className="form-card">
                 <div className="section-header">
                     <div className="section-header-icon"><ShieldIcon /></div>
@@ -171,9 +171,11 @@ const GuardianDetailsTab = ({ profileData, updateProfile }) => {
             </div>
 
             <div className="form-actions">
+                {!readOnly && (
                 <button className="btn-save" onClick={handleSubmit} disabled={isSubmitting}>
                     {isSubmitting ? 'Saving...' : 'Submit Details'}
                 </button>
+                )}
             </div>
         </div>
     );

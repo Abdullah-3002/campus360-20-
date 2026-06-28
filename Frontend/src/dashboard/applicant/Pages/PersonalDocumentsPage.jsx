@@ -5,7 +5,7 @@ import { getApplicantProfile, getMyDocuments, uploadDocument, deleteDocument } f
 import { InfoIcon, FileIcon, UploadIcon, XIcon, TrashIcon, CheckIcon } from '../../Icons';
 import { getDocumentUploadError, isValidDocumentUpload } from '../../../utils/validation';
 
-const PersonalDocumentsPage = ({ onDocumentChange }) => {
+const PersonalDocumentsPage = ({ onDocumentChange, readOnly = false }) => {
     const { token } = useAuth();
     const [documents, setDocuments] = useState([]);
     const [dragActive, setDragActive] = useState(false);
@@ -235,7 +235,7 @@ const PersonalDocumentsPage = ({ onDocumentChange }) => {
                 </div>
             </div>
 
-            <div className="form-card">
+            <div className="form-card" style={readOnly ? { display: 'none' } : undefined}>
                 <div className="section-header">
                     <div className="section-header-icon"><FileIcon /></div>
                     <h2 className="section-title">Upload Document</h2>
@@ -310,7 +310,7 @@ const PersonalDocumentsPage = ({ onDocumentChange }) => {
                 <div className="data-table-wrapper">
                     <table className="data-table">
                         <thead>
-                            <tr><th>Document Type</th><th>File Name</th><th>Status</th><th>Uploaded At</th><th>Action</th></tr>
+                            <tr><th>Document Type</th><th>File Name</th><th>Status</th><th>Uploaded At</th>{!readOnly && <th>Action</th>}</tr>
                         </thead>
                         <tbody>
                             {documents.length === 0 ? (
@@ -322,7 +322,9 @@ const PersonalDocumentsPage = ({ onDocumentChange }) => {
                                         <td>{doc.file_name}</td>
                                         <td><span className={getStatusBadgeClass(doc.is_verified)}>{getStatusText(doc.is_verified)}</span></td>
                                         <td>{doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : '—'}</td>
+                                        {!readOnly && (
                                         <td><button className="action-btn danger" onClick={() => handleRemove(getDocumentId(doc))}><TrashIcon /></button></td>
+                                        )}
                                     </tr>
                                 ))
                             )}

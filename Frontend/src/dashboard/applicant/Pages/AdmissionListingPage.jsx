@@ -11,7 +11,7 @@ const EyeIcon = ({ size = 16 }) => (
     </svg>
 );
 
-const AdmissionListingPage = ({ onCreateNew }) => {
+const AdmissionListingPage = ({ onCreateNew, readOnly = false }) => {
     const { token } = useAuth();
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -331,7 +331,8 @@ const deleteApplication = async (appId, appNumber) => {
                     <button 
                         className="btn-add" 
                         onClick={onCreateNew} 
-                        disabled={applications.length > 0}
+                        disabled={applications.length > 0 || readOnly}
+                        style={readOnly ? { display: 'none' } : undefined}
                         title={applications.length > 0 ? "You can only create one application" : "Create new admission application"}
                     >
                         <PlusIcon /> <span>Create New Application</span>
@@ -381,6 +382,7 @@ const deleteApplication = async (appId, appNumber) => {
                                                 >
                                                     <EyeIcon size={16} />
                                                 </button>
+                                                {!readOnly && (
                                                 <button 
                                                     className="action-btn danger"
                                                     onClick={() => deleteApplication(app.id, app.application_number)}
@@ -388,6 +390,7 @@ const deleteApplication = async (appId, appNumber) => {
                                                 >
                                                     <TrashIcon size={16} />
                                                 </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

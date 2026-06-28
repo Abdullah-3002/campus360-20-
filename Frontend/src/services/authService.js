@@ -29,3 +29,13 @@ export const getCurrentUser = async (token) => {
     });
     return response.data;
 };
+
+export const changeUserType = async (userId, userType, token) => {
+    const response = await axios.post(`${BASE_URL}/users/change-type/`, {
+        user_id: userId,
+        user_type: userType,
+    }, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+};

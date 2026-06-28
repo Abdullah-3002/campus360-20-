@@ -124,6 +124,11 @@ export const deleteAcademicRecord = async (recordId, token) => {
 // APPLICATIONS
 // ============================================
 
+export const getAdmissionPrograms = async (token) => {
+  const response = await axios.get(`${BASE_URL}/programs/`, getAuthHeader(token));
+  return response.data;
+};
+
 export const submitApplication = async (applicationData, token) => {
   const response = await axios.post(`${BASE_URL}/application/`, applicationData, getAuthHeader(token));
   return response.data;
@@ -166,4 +171,68 @@ export const uploadDocument = async (documentData, token) => {
 export const deleteDocument = async (documentId, token) => {
   const response = await axios.delete(`${BASE_URL}/documents/${documentId}/`, getAuthHeader(token));
   return response.data;
+};
+
+// ============================================
+// ADMIN ADMISSIONS
+// ============================================
+
+export const adminListApplications = async (token, statusFilter = '') => {
+  const params = statusFilter ? { status: statusFilter } : {};
+  const response = await axios.get(`${BASE_URL}/admin/applications/`, {
+    ...getAuthHeader(token),
+    params,
+  });
+  return response.data;
+};
+
+export const adminGetApplicationDetail = async (applicationId, token) => {
+  const response = await axios.get(`${BASE_URL}/admin/applications/${applicationId}/`, getAuthHeader(token));
+  return response.data;
+};
+
+export const adminMakeDecision = async (applicationId, decisionData, token) => {
+  const response = await axios.post(
+    `${BASE_URL}/admin/applications/${applicationId}/decide/`,
+    decisionData,
+    getAuthHeader(token)
+  );
+  return response.data;
+};
+
+export const adminConfirmRegistration = async (applicationId, token) => {
+  const response = await axios.post(
+    `${BASE_URL}/admin/applications/${applicationId}/confirm-registration/`,
+    {},
+    getAuthHeader(token)
+  );
+  return response.data;
+};
+
+export const adminDownloadDocument = async (applicationId, docId, token) => {
+  const response = await axios.get(
+    `${BASE_URL}/admin/applications/${applicationId}/documents/${docId}/download/`,
+    { ...getAuthHeader(token), responseType: 'blob' }
+  );
+  return response;
+};
+
+export const adminVerifyDocument = async (applicationId, docId, token) => {
+  const response = await axios.post(
+    `${BASE_URL}/admin/applications/${applicationId}/documents/${docId}/verify/`,
+    {},
+    getAuthHeader(token)
+  );
+  return response.data;
+};
+
+export const isApplicationLocked = (applications) => {
+  const lockedStatuses = ['pending', 'under_review', 'documents_pending', 'approved', 'rejected', 'waitlist', 'registered'];
+  const apps = Array.isArray(applications) ? applications : [];
+  return apps.some(app => lockedStatuses.includes(app.status));
+};
+
+export const hasRejectedApplication = (applications) => {
+  const apps = Array.isArray(applications) ? applications : [];
+  return apps.some(app => app.status === 'rejected');
 };

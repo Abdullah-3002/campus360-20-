@@ -27,6 +27,7 @@ class Student(models.Model):
     status                       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     cgpa                         = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     total_credit_hours_completed = models.IntegerField(default=0)
+    section                      = models.CharField(max_length=50, blank=True, null=True)
     created_at                   = models.DateTimeField(auto_now_add=True)
     updated_at                   = models.DateTimeField(auto_now=True)
 

@@ -27,15 +27,15 @@ export const getCNICError = (value) => {
 };
 
 // ============================================
-// PHONE VALIDATION (10 digits after country code)
+// PHONE VALIDATION (11 digits)
 // ============================================
 export const isValidPhone = (value) => {
-    return /^\d{10}$/.test(value);
+    return /^\d{11}$/.test(value);
 };
 
 export const getPhoneError = (value) => {
     if (!value) return 'Phone number is required';
-    if (!isValidPhone(value)) return 'Phone number must be exactly 10 digits';
+    if (!isValidPhone(value)) return 'Phone number must be exactly 11 digits';
     return '';
 };
 
@@ -144,7 +144,7 @@ export const getEmergencyContactError = (emergency) => {
     if (!emergency?.name) errors.name = 'Emergency contact name is required';
     if (!emergency?.relation) errors.relation = 'Relation is required';
     if (!emergency?.phone) errors.phone = 'Emergency phone number is required';
-    if (emergency?.phone && !isValidPhone(emergency.phone)) errors.phone = 'Phone number must be exactly 10 digits';
+    if (emergency?.phone && !isValidPhone(emergency.phone)) errors.phone = 'Phone number must be exactly 11 digits';
     return errors;
 };
 
@@ -298,7 +298,7 @@ export const formatPhone = (value) => {
     const digits = value.replace(/\D/g, '');
     if (digits.length <= 4) return digits;
     if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
-    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 10)}`;
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 11)}`;
 };
 
 export const getAgeFromDOB = (dob) => {
@@ -319,7 +319,7 @@ export const getAgeFromDOB = (dob) => {
 export const patterns = {
     name: /^[A-Za-z\s]+$/,
     cnic: /^\d{13}$/,
-    phone: /^\d{10}$/,
+    phone: /^\d{11}$/,
     username: /^[a-zA-Z0-9_.]{3,20}$/,
     email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,

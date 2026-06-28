@@ -109,6 +109,7 @@ const LoginPage = ({ setView }) => {
             const data = await loginUser(formData.email, formData.password);
             if (login) login(data.user, data.token);
             setView('dashboard');
+            return;
             
         } catch (error) {
             if (error.response && error.response.status === 401) {

@@ -10,6 +10,9 @@ urlpatterns = [
     path('academic/list/', views.get_academic_records, name='academic-list'),
     path('academic/<int:record_id>/', views.delete_academic_record, name='delete-academic-record'),
     
+    # Programs for applicants
+    path('programs/', views.list_admission_programs, name='admission-programs'),
+
     # Application URLs
     path('application/', views.admission_application, name='application'),
     path('application/<int:app_id>/', views.delete_application, name='delete-application'),
@@ -22,6 +25,9 @@ urlpatterns = [
 
      # Applications — admin
     path('admin/applications/',                                         views.admin_list_applications,      name='admin-applications'),
+    path('admin/applications/<int:application_id>/',                      views.admin_application_detail,     name='admin-application-detail'),
     path('admin/applications/<int:application_id>/decide/',             views.make_decision,                name='make-decision'),
     path('admin/applications/<int:application_id>/confirm-registration/', views.confirm_student_registration, name='confirm-registration'),
+    path('admin/applications/<int:application_id>/documents/<int:doc_id>/download/', views.admin_download_document, name='admin-download-document'),
+    path('admin/applications/<int:application_id>/documents/<int:doc_id>/verify/', views.admin_verify_document, name='admin-verify-document'),
 ]

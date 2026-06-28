@@ -4,6 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import logout as django_logout
 from django.utils import timezone
+from django.db import transaction
 from .models import User, LoginSession, PasswordReset, UserRole, Role
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserSerializer,
@@ -12,6 +13,8 @@ from .serializers import (
 )
 from .utils import generate_jwt_token, create_login_session, generate_password_reset_token
 from .permissions import IsAdmin
+from faculty.models import Faculty, Staff, EmployeeProfile, Designation
+from academics.models import Department
 import jwt
 from django.conf import settings
 
@@ -335,3 +338,205 @@ def get_user_roles(request, user_id=None):
         'username': target_user.username,
         'roles': roles
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def change_user_type(request):
+    """Change a user's primary role (user_type) for dashboard routing."""
+    user_id = request.data.get('user_id')
+    new_type = request.data.get('user_type')
+
+    valid_types = [choice[0] for choice in User.USER_TYPE_CHOICES]
+    if not user_id or not new_type:
+        return Response(
+            {'error': 'user_id and user_type are required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if new_type not in valid_types:
+        return Response(
+            {'error': f'user_type must be one of: {", ".join(valid_types)}'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Restriction: Admin can only change applicant into student role only
+    if user.user_type == 'applicant' and new_type != 'student':
+        return Response(
+            {'error': 'Applicants can only be changed to the student role.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if user.user_id == request.user.user_id and new_type != 'admin':
+        return Response(
+            {'error': 'You cannot change your own role away from admin.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    old_type = user.user_type
+    user.user_type = new_type
+    user.save(update_fields=['user_type'])
+
+    role_name_map = {
+        'student': 'Student',
+        'teacher': 'Teacher',
+        'staff': 'Staff',
+        'admin': 'Admin',
+        'applicant': 'Applicant',
+    }
+    role_name = role_name_map.get(new_type)
+    if role_name:
+        role, _ = Role.objects.get_or_create(
+            role_name=role_name,
+            defaults={'description': f'{role_name} role'},
+        )
+        UserRole.objects.filter(user=user).delete()
+        UserRole.objects.create(user=user, role=role, assigned_by=request.user)
+
+    return Response({
+        'message': f'User role changed from {old_type} to {new_type}.',
+        'user_id': user.user_id,
+        'email': user.email,
+        'username': user.username,
+        'user_type': user.user_type,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def create_user_credentials(request):
+    """
+    Admin endpoint to create user credentials and set role (teacher, staff, admin).
+    For teacher/staff, auto-populates Faculty/Staff record and EmployeeProfile.
+    """
+    username = request.data.get('username')
+    email = request.data.get('email')
+    password = request.data.get('password')
+    user_type = request.data.get('user_type') or request.data.get('role')
+
+    if not username or not email or not password or not user_type:
+        return Response({'error': 'username, email, password, and user_type/role are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if user_type not in ['admin', 'teacher', 'staff']:
+        return Response({'error': 'user_type must be admin, teacher, or staff.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(username=username).exists():
+        return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.filter(email=email).exists():
+        return Response({'error': 'Email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            user_type=user_type
+        )
+
+        role_map = {'admin': 'Admin', 'teacher': 'Teacher', 'staff': 'Staff'}
+        role_obj, _ = Role.objects.get_or_create(role_name=role_map[user_type])
+        UserRole.objects.create(user=user, role=role_obj, assigned_by=request.user)
+
+        if user_type in ['teacher', 'staff']:
+            dept_id = request.data.get('department_id')
+            desig_id = request.data.get('designation_id')
+
+            department = None
+            if dept_id:
+                department = Department.objects.filter(department_id=dept_id).first()
+            if not department:
+                department = Department.objects.first()
+                if not department:
+                    department = Department.objects.create(
+                        department_name='General Academic Department',
+                        department_code='GEN'
+                    )
+
+            designation = None
+            if desig_id:
+                designation = Designation.objects.filter(designation_id=desig_id).first()
+            if not designation:
+                designation = Designation.objects.first()
+                if not designation:
+                    default_title = 'Lecturer' if user_type == 'teacher' else 'Officer'
+                    designation = Designation.objects.create(designation_title=default_title)
+
+            emp_type = request.data.get('employment_type', 'permanent')
+            emp_status = request.data.get('status', 'active')
+            joining_date = timezone.now().date()
+            year = joining_date.year
+
+            cnic = request.data.get('cnic', '0000000000000')
+            dob = request.data.get('date_of_birth') or request.data.get('dob') or '2000-01-01'
+            gender = request.data.get('gender', 'Male')
+            phone = request.data.get('phone_number') or request.data.get('phone') or '03000000000'
+            em_name = request.data.get('emergency_contact_name') or 'N/A'
+            em_phone = request.data.get('emergency_contact_phone') or '03000000000'
+            em_rel = request.data.get('emergency_contact_relation') or 'Parent'
+            curr_addr = request.data.get('current_address') or 'N/A'
+            perm_addr = request.data.get('permanent_address') or curr_addr
+
+            if user_type == 'teacher':
+                count = Faculty.objects.count()
+                emp_code = f"FAC-{year}-{str(count + 1).zfill(4)}"
+                qual = request.data.get('qualification', 'Master')
+                fac_obj = Faculty.objects.create(
+                    user=user,
+                    department=department,
+                    designation=designation,
+                    employee_code=emp_code,
+                    qualification=qual,
+                    joining_date=joining_date,
+                    employment_type=emp_type,
+                    status=emp_status,
+                )
+                EmployeeProfile.objects.create(
+                    employee_id=fac_obj.faculty_id,
+                    employee_type='faculty',
+                    cnic=cnic if not EmployeeProfile.objects.filter(cnic=cnic).exists() else f"{cnic[:9]}{count+1:04d}",
+                    date_of_birth=dob,
+                    gender=gender,
+                    phone_number=phone,
+                    emergency_contact_name=em_name,
+                    emergency_contact_phone=em_phone,
+                    emergency_contact_relation=em_rel,
+                    current_address=curr_addr,
+                    permanent_address=perm_addr,
+                )
+            else:
+                count = Staff.objects.count()
+                emp_code = f"STF-{year}-{str(count + 1).zfill(4)}"
+                stf_obj = Staff.objects.create(
+                    user=user,
+                    department=department,
+                    designation=designation,
+                    employee_code=emp_code,
+                    joining_date=joining_date,
+                    employment_type=emp_type,
+                    status=emp_status,
+                )
+                EmployeeProfile.objects.create(
+                    employee_id=stf_obj.staff_id,
+                    employee_type='staff',
+                    cnic=cnic if not EmployeeProfile.objects.filter(cnic=cnic).exists() else f"{cnic[:9]}{count+1:04d}",
+                    date_of_birth=dob,
+                    gender=gender,
+                    phone_number=phone,
+                    emergency_contact_name=em_name,
+                    emergency_contact_phone=em_phone,
+                    emergency_contact_relation=em_rel,
+                    current_address=curr_addr,
+                    permanent_address=perm_addr,
+                )
+
+    return Response({
+        'message': f'User credentials created successfully with role {user_type}.',
+        'user_id': user.user_id,
+        'username': user.username,
+        'email': user.email,
+        'user_type': user.user_type,
+    }, status=status.HTTP_201_CREATED)

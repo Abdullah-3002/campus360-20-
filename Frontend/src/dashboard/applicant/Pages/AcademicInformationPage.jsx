@@ -4,7 +4,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { getAcademicRecords, getMyDocuments, deleteAcademicRecord } from '../../../services/admissionService';
 import { SearchIcon, PlusIcon, InfoIcon, TrashIcon } from '../../Icons';
 
-const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange }) => {
+const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange, readOnly = false }) => {
     const { token } = useAuth();
     const [search, setSearch] = useState('');
     const [records, setRecords] = useState([]);
@@ -158,7 +158,7 @@ const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange }) => {
                             onChange={(e) => setSearch(e.target.value)} 
                         />
                     </div>
-                    <button className="btn-add" onClick={onAddClick} disabled={deleting}>
+                    <button className="btn-add" onClick={onAddClick} disabled={deleting || readOnly} style={readOnly ? { display: 'none' } : undefined}>
                         <PlusIcon /> <span>ADD</span>
                     </button>
                 </div>
@@ -176,7 +176,7 @@ const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange }) => {
                                 <th>Total Marks</th>
                                 <th>Start Year</th>
                                 <th>End Year</th>
-                                <th>Action</th>
+                                {!readOnly && <th>Action</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -198,6 +198,7 @@ const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange }) => {
                                         <td>{getFieldValue(record.total)}</td>
                                         <td>{getFieldValue(record.start_year)}</td>
                                         <td>{getFieldValue(record.end_year)}</td>
+                                        {!readOnly && (
                                         <td>
                                             <button 
                                                 className="action-btn danger" 
@@ -208,6 +209,7 @@ const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange }) => {
                                                 <TrashIcon />
                                             </button>
                                         </td>
+                                        )}
                                     </tr>
                                 ))
                             )}

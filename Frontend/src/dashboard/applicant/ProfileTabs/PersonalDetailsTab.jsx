@@ -14,7 +14,7 @@ import {
     isValidDOB
 } from '../../../utils/validation';
 
-const PersonalDetailsTab = ({ profileData, updateProfile }) => {
+const PersonalDetailsTab = ({ profileData, updateProfile, readOnly = false }) => {
     const { token } = useAuth();
     const fileInputRef = useRef(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,9 +154,9 @@ const PersonalDetailsTab = ({ profileData, updateProfile }) => {
     };
 
     return (
-        <div className="form-card fade-in">
+        <div className="form-card fade-in" style={readOnly ? { pointerEvents: 'none', opacity: 0.92 } : undefined}>
             <div className="profile-upload-section">
-                <div className="profile-upload-wrapper" title="Upload Photo" onClick={() => fileInputRef.current?.click()}>
+                <div className="profile-upload-wrapper" title="Upload Photo" onClick={() => !readOnly && fileInputRef.current?.click()}>
                     <img 
                         src={profileData.profileImage || "/placeholder-avatar.png"} 
                         alt="Upload" 
@@ -273,7 +273,7 @@ const PersonalDetailsTab = ({ profileData, updateProfile }) => {
                         {touched.cellPhone && errors.cellPhone && (
                             <div className="error-message">{errors.cellPhone}</div>
                         )}
-                        <p className="helper-text">Enter 10-digit phone number (e.g., 03001234567)</p>
+                        <p className="helper-text">Enter 11-digit phone number (e.g., 03001234567)</p>
                     </div>
                 </div>
 
@@ -357,9 +357,11 @@ const PersonalDetailsTab = ({ profileData, updateProfile }) => {
             </div>
 
             <div className="form-actions">
+                {!readOnly && (
                 <button className="btn-update" onClick={handleUpdate} disabled={isSubmitting}>
                     {isSubmitting ? 'Saving...' : 'Submit Details'}
                 </button>
+                )}
             </div>
         </div>
     );

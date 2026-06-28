@@ -3069,3 +3069,86 @@ select:disabled {
 .phone-input {
     padding-left: 55px !important;
 }
+
+/* Admin application review — dark-theme readable detail rows */
+.review-detail-row {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.review-detail-label {
+    min-width: 160px;
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.review-detail-value {
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    flex: 1;
+    word-break: break-word;
+}
+
+.review-section-title {
+    margin: 0 0 12px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.review-section-title-spaced {
+    margin: 20px 0 12px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.admin-actions-panel {
+    margin-top: 24px;
+    padding: 20px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-medium);
+}
+
+.decision-banner {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.decision-banner.approved {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-success);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.decision-banner.rejected {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-danger);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.decision-banner.waitlist {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-warning);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.workflow-step-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+}
+
+.workflow-step-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}

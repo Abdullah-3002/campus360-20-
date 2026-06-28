@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from accounts.permissions import IsAdmin, IsAdminOrTeacher
 from students.models import Student
+from sections.models import Section
 from .models import Attendance, AttendanceRecord, StudentAttendanceSummary
 from .serializers import AttendanceSerializer, AttendanceRecordSerializer, StudentAttendanceSummarySerializer
 
@@ -22,8 +23,16 @@ def mark_attendance(request):
     topic_covered   = request.data.get('topic_covered', '')
     records_data    = request.data.get('records', [])
 
+    if not section_id:
+        course_id = request.data.get('course_id') or request.data.get('course')
+        section_name = request.data.get('section_name') or request.data.get('section')
+        if course_id and section_name:
+            sec_obj = Section.objects.filter(course_id=course_id, section_name=section_name).first()
+            if sec_obj:
+                section_id = sec_obj.section_id
+
     if not section_id or not attendance_date:
-        return Response({'error': 'section_id and attendance_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'section_id (or course and section name) and attendance_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
     attendance, created = Attendance.objects.get_or_create(
         section_id=section_id,
@@ -57,29 +66,51 @@ def _update_summary(record):
         course=record.attendance.section.course,
         semester=record.attendance.section.semester,
     )
-    summary.total_lectures = AttendanceRecord.objects.filter(
+    
+    # Total lectures target based on course credit hours
+    ch = getattr(record.attendance.section.course, 'credit_hours', 3)
+    if ch == 3:
+        summary.total_lectures = 32
+    elif ch == 1:
+        summary.total_lectures = 16
+    elif ch == 2:
+        summary.total_lectures = 24
+    elif ch == 4:
+        summary.total_lectures = 40
+    else:
+        summary.total_lectures = ch * 10
+
+    conducted_lectures = AttendanceRecord.objects.filter(
         student=record.student,
         attendance__section=record.attendance.section
     ).count()
+
     summary.attended_lectures = AttendanceRecord.objects.filter(
         student=record.student,
         attendance__section=record.attendance.section,
         status='present'
     ).count()
+
     summary.late_count = AttendanceRecord.objects.filter(
         student=record.student,
         attendance__section=record.attendance.section,
         status='late'
     ).count()
+
     summary.leave_count = AttendanceRecord.objects.filter(
         student=record.student,
         attendance__section=record.attendance.section,
         status='leave'
     ).count()
-    if summary.total_lectures > 0:
-        summary.attendance_percentage = (summary.attended_lectures / summary.total_lectures) * 100
-        summary.is_below_threshold = summary.attendance_percentage < 75
+
+    if conducted_lectures > 0:
+        summary.attendance_percentage = (summary.attended_lectures / conducted_lectures) * 100.0
+    else:
+        summary.attendance_percentage = 100.0
+
+    summary.is_below_threshold = summary.attendance_percentage < 75.0
     summary.save()
+
 
 
 @api_view(['GET'])

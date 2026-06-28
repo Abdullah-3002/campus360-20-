@@ -2,13 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext'; 
-import { submitApplication, getMyApplications } from '../../../services/admissionService';
+import { submitApplication, getMyApplications, getAdmissionPrograms } from '../../../services/admissionService';
 import { PlusIcon, TrashIcon, XIcon, CheckIcon, SparklesIcon, ArrowRightIcon, InfoIcon } from '../../Icons';
 
-const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp = false }) => {
+const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, hasExistingApp = false }) => {
     const [activeTab, setActiveTab] = useState('detail');
     const [appType, setAppType] = useState('Regular');
     const [preferences, setPreferences] = useState([]);
+    const [availablePrograms, setAvailablePrograms] = useState([]);
+    const [programsLoading, setProgramsLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [pendingPref, setPendingPref] = useState(null);
     const [showToast, setShowToast] = useState(false);
@@ -23,26 +25,23 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
         preference: ''
     });
 
-    // Available programs list
-    const availablePrograms = [
-        { id: 1, name: "BS Computer Science", department: "Faculty of Computing & Information Technology" },
-        { id: 2, name: "BS Software Engineering", department: "Faculty of Computing & Information Technology" },
-        { id: 3, name: "BS Information Technology", department: "Faculty of Computing & Information Technology" },
-        { id: 4, name: "BS Data Science", department: "Faculty of Computing & Information Technology" },
-        { id: 5, name: "BS Artificial Intelligence", department: "Faculty of Computing & Information Technology" },
-        { id: 6, name: "BS Cyber Security", department: "Faculty of Computing & Information Technology" },
-        { id: 7, name: "BS Business Administration", department: "Faculty of Business & Management Sciences" },
-        { id: 8, name: "BS Accounting & Finance", department: "Faculty of Business & Management Sciences" },
-        { id: 9, name: "BS Media Studies", department: "Faculty of Arts & Social Sciences" },
-        { id: 10, name: "BS Psychology", department: "Faculty of Arts & Social Sciences" },
-        { id: 11, name: "BS English", department: "Faculty of Arts & Social Sciences" },
-        { id: 12, name: "BS Economics", department: "Faculty of Arts & Social Sciences" },
-    ];
+    useEffect(() => {
+        const loadPrograms = async () => {
+            if (!token) return;
+            setProgramsLoading(true);
+            try {
+                const programs = await getAdmissionPrograms(token);
+                setAvailablePrograms(Array.isArray(programs) ? programs : []);
+            } catch (error) {
+                console.error('Failed to load programs:', error);
+                setAvailablePrograms([]);
+            } finally {
+                setProgramsLoading(false);
+            }
+        };
+        loadPrograms();
+    }, [token]);
 
-    // REMOVED: The auto-check for existing application that shows alert
-    // The check is now done in Dashboard.jsx before navigating here
-
-    // Load existing application data if editing
     useEffect(() => {
         if (editApplicationId) {
             loadApplicationData();
@@ -60,9 +59,11 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
                     const loadedPrefs = application.preferences.map((pref, index) => ({
                         id: pref.id || Date.now() + index,
                         sr: index + 1,
-                        program: pref.program,
+                        program_id: pref.program,
+                        program: pref.program_name || pref.program,
                         preference: pref.preference_order,
-                        department: pref.department
+                        preference_label: `${pref.preference_order}${pref.preference_order === 1 ? 'st' : pref.preference_order === 2 ? 'nd' : 'rd'} Preference`,
+                        department: pref.department_name || pref.department
                     }));
                     setPreferences(loadedPrefs);
                 }
@@ -74,13 +75,14 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
         }
     };
 
-    const getDepartment = (programName) => {
-        const program = availablePrograms.find(p => p.name === programName);
-        return program ? program.department : 'Faculty of Computing & Information Technology';
+    const getSelectedProgram = (programId) => {
+        return availablePrograms.find(p => String(p.program_id) === String(programId));
     };
 
-    const isPreferenceExists = (program, preference) => {
-        return preferences.some(p => p.program === program || p.preference === preference);
+    const isPreferenceExists = (programId, preference) => {
+        const programTaken = programId && preferences.some(p => String(p.program_id) === String(programId));
+        const orderTaken = preference && preferences.some(p => p.preference_label === preference || String(p.preference) === String(preference));
+        return programTaken || orderTaken;
     };
 
     const handleAddClick = () => {
@@ -92,21 +94,24 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
             alert('Please select a preference');
             return;
         }
-        
-        if (isPreferenceExists(null, formData.preference)) {
-            alert(`Preference ${formData.preference} has already been added. Please choose a different preference.`);
+
+        const selectedProgram = getSelectedProgram(formData.program);
+        if (!selectedProgram) {
+            alert('Please select a valid program');
             return;
         }
         
-        if (isPreferenceExists(formData.program, null)) {
-            alert('This program has already been added. Please choose a different program.');
+        if (isPreferenceExists(formData.program, formData.preference)) {
+            alert(`This program or preference order has already been added. Please choose different options.`);
             return;
         }
 
         setPendingPref({
-            program: formData.program,
+            program_id: selectedProgram.program_id,
+            program: selectedProgram.program_name,
             preference: formData.preference,
-            department: getDepartment(formData.program)
+            preference_order: parseInt(formData.preference),
+            department: selectedProgram.department_name
         });
         setShowModal(true);
     };
@@ -115,8 +120,10 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
         const newPreferences = [...preferences, { 
             id: Date.now(),
             sr: preferences.length + 1,
+            program_id: pendingPref.program_id,
             program: pendingPref.program,
-            preference: pendingPref.preference,
+            preference: pendingPref.preference_order,
+            preference_label: pendingPref.preference,
             department: pendingPref.department
         }];
         
@@ -172,8 +179,10 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
             const applicationData = {
                 admission_type: appType,
                 preferences: preferences.map(p => ({
+                    program_id: p.program_id,
                     program: p.program,
-                    preference: p.preference,
+                    preference_order: p.preference,
+                    preference: p.preference_label || `${p.preference}${p.preference === 1 ? 'st' : p.preference === 2 ? 'nd' : 'rd'} Preference`,
                     department: p.department
                 }))
             };
@@ -185,6 +194,7 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
             
             setTimeout(() => {
                 setShowSuccessModal(false);
+                if (onSubmitted) onSubmitted();
                 onCancel();
             }, 3000);
             
@@ -205,7 +215,7 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
         return allPrefs.filter(p => !usedPrefs.includes(p));
     };
 
-    if (loading) {
+    if (loading || programsLoading) {
         return (
             <div className="page-container fade-in">
                 <div className="loading-spinner">Loading application data...</div>
@@ -310,11 +320,12 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
                                 className="field-input field-select" 
                                 value={formData.program}
                                 onChange={(e) => setFormData({...formData, program: e.target.value})}
+                                disabled={programsLoading || availablePrograms.length === 0}
                             >
-                                <option value="">Select Program</option>
+                                <option value="">{programsLoading ? 'Loading programs...' : 'Select Program'}</option>
                                 {availablePrograms.map(program => (
-                                    <option key={program.id} value={program.name}>
-                                        {program.name} ({program.department})
+                                    <option key={program.program_id} value={program.program_id}>
+                                        {program.program_name} ({program.department_name})
                                     </option>
                                 ))}
                             </select>
@@ -328,7 +339,7 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
                             >
                                 <option value="">Select Preference</option>
                                 {getAvailablePreferences().map(pref => (
-                                    <option key={pref} value={`${pref}${pref === 1 ? 'st' : pref === 2 ? 'nd' : 'rd'} Preference`}>
+                                    <option key={pref} value={pref}>
                                         {pref}{pref === 1 ? 'st' : pref === 2 ? 'nd' : 'rd'} Preference
                                     </option>
                                 ))}
@@ -383,7 +394,7 @@ const AdmissionFormPage = ({ onCancel, editApplicationId = null, hasExistingApp 
                                              <td>{p.sr}</td>
                                              <td>{p.department}</td>
                                              <td><strong>{p.program}</strong></td>
-                                             <td><span className="pref-badge">{p.preference}</span></td>
+                                             <td><span className="pref-badge">{p.preference_label || p.preference}</span></td>
                                              <td>
                                                 <button 
                                                     className="action-btn danger" 

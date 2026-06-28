@@ -24,4 +24,6 @@ urlpatterns = [
     path('roles/remove/', views.remove_role, name='remove-role'),
     path('roles/user/', views.get_user_roles, name='user-roles'),
     path('roles/user/<int:user_id>/', views.get_user_roles, name='user-roles-specific'),
+    path('users/change-type/', views.change_user_type, name='change-user-type'),
+    path('admin/create-credentials/', views.create_user_credentials, name='create-credentials'),
 ]

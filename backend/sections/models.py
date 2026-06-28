@@ -51,3 +51,18 @@ class SectionSchedule(models.Model):
 
     def __str__(self):
         return f"{self.section} — {self.day_of_week} {self.start_time}"
+
+
+class BatchSection(models.Model):
+    batch_section_id = models.AutoField(primary_key=True)
+    section_name     = models.CharField(max_length=50) # e.g. "blue", "grey"
+    batch_year       = models.IntegerField() # e.g. 2026
+    program          = models.ForeignKey('academics.DegreeProgram', on_delete=models.CASCADE, related_name='batch_sections')
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'batch_section'
+        unique_together = ['section_name', 'batch_year', 'program']
+
+    def __str__(self):
+        return f"{self.program.program_code} — {self.batch_year} — Section {self.section_name}"

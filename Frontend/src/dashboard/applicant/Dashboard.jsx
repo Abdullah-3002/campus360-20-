@@ -1,7 +1,7 @@
 // src/dashboard/applicant/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { getApplicantProfile, getMyDocuments, getAcademicRecords, getMyApplications } from '../../services/admissionService';
+import { getApplicantProfile, getMyDocuments, getAcademicRecords, getMyApplications, isApplicationLocked, hasRejectedApplication } from '../../services/admissionService';
 import '../../Dashboard.css';
 
 
@@ -33,6 +33,7 @@ import AddAcademicInfoPage from './Pages/AddAcademicInfoPage';
 import AdmissionListingPage from './Pages/AdmissionListingPage';
 import AdmissionFormPage from './Pages/AdmissionFormPage';
 import ChangePasswordPage from './Pages/ChangePasswordPage';
+import RejectedApplicationView from './Pages/RejectedApplicationView';
 
 // Sequential order of tabs
 const TAB_ORDER = ['personal', 'residence', 'emergency', 'guardian'];
@@ -156,6 +157,9 @@ const Dashboard = ({ setView, user }) => {
     
     const [documents, setDocuments] = useState([]);
     const [academicRecords, setAcademicRecords] = useState([]);
+    const [applications, setApplications] = useState([]);
+    const [isLocked, setIsLocked] = useState(false);
+    const [isRejected, setIsRejected] = useState(false);
     const [loading, setLoading] = useState(true);
     
     const [currentPage, setCurrentPage] = useState('home');
@@ -194,6 +198,21 @@ const Dashboard = ({ setView, user }) => {
         }
     }, [token]);
 
+    const refreshApplications = useCallback(async () => {
+        if (!token || !isMounted.current) return;
+        try {
+            const apps = await getMyApplications(token);
+            const appsArray = Array.isArray(apps) ? apps : (apps?.results || []);
+            if (isMounted.current) {
+                setApplications(appsArray);
+                setIsLocked(isApplicationLocked(appsArray));
+                setIsRejected(hasRejectedApplication(appsArray));
+            }
+        } catch (error) {
+            console.error('Failed to refresh applications:', error);
+        }
+    }, [token]);
+
     useEffect(() => {
         isMounted.current = true;
         
@@ -221,6 +240,14 @@ const Dashboard = ({ setView, user }) => {
                 const records = await getAcademicRecords(token);
                 console.log('Loaded academic records from API:', records);
                 if (isMounted.current) setAcademicRecords(Array.isArray(records) ? records : []);
+
+                const apps = await getMyApplications(token);
+                const appsArray = Array.isArray(apps) ? apps : (apps?.results || []);
+                if (isMounted.current) {
+                    setApplications(appsArray);
+                    setIsLocked(isApplicationLocked(appsArray));
+                    setIsRejected(hasRejectedApplication(appsArray));
+                }
             } catch (error) {
                 console.error('Failed to load data:', error);
                 if (isMounted.current) {
@@ -341,13 +368,19 @@ const Dashboard = ({ setView, user }) => {
 
     // Navigation to New Application - requires ALL profile tabs, ALL documents, AND academic records, AND no existing application
     const navigateToNewApplication = async () => {
+        if (isLocked) {
+            alert('Your application has already been submitted. You cannot create a new one.');
+            setCurrentPage('application-list');
+            return;
+        }
+
         // First, check if there's an existing application
         try {
             const existingApps = await getMyApplications(token);
             const appsArray = Array.isArray(existingApps) ? existingApps : (existingApps?.results || []);
             
             if (appsArray.length > 0) {
-                alert('You already have an active application. Please delete your existing application before creating a new one.');
+                alert('You already have a submitted application.');
                 setCurrentPage('application-list');
                 return;
             }
@@ -386,17 +419,18 @@ const Dashboard = ({ setView, user }) => {
     };
 
     const renderActiveTab = () => {
+        const tabProps = { readOnly: isLocked };
         switch (activeTab) {
             case 'personal':  
-                return <PersonalDetailsTab profileData={profileData} updateProfile={handleProfileChange} />;
+                return <PersonalDetailsTab profileData={profileData} updateProfile={handleProfileChange} {...tabProps} />;
             case 'residence': 
-                return <ResidenceDetailsTab profileData={profileData} updateProfile={handleNestedProfileChange} />;
+                return <ResidenceDetailsTab profileData={profileData} updateProfile={handleNestedProfileChange} {...tabProps} />;
             case 'emergency': 
-                return <EmergencyContactTab profileData={profileData} updateProfile={handleNestedProfileChange} />;
+                return <EmergencyContactTab profileData={profileData} updateProfile={handleNestedProfileChange} {...tabProps} />;
             case 'guardian':  
-                return <GuardianDetailsTab profileData={profileData} updateProfile={handleNestedProfileChange} />;
+                return <GuardianDetailsTab profileData={profileData} updateProfile={handleNestedProfileChange} {...tabProps} />;
             default:          
-                return <PersonalDetailsTab profileData={profileData} updateProfile={handleProfileChange} />;
+                return <PersonalDetailsTab profileData={profileData} updateProfile={handleProfileChange} {...tabProps} />;
         }
     };
 
@@ -418,6 +452,15 @@ const Dashboard = ({ setView, user }) => {
                     <p>Loading your profile...</p>
                 </div>
             </div>
+        );
+    }
+
+    if (isRejected) {
+        return (
+            <RejectedApplicationView
+                username={studentInfo.username}
+                onLogout={handleLogout}
+            />
         );
     }
 
@@ -498,7 +541,7 @@ const Dashboard = ({ setView, user }) => {
                             <a 
                                 className={`sidebar-sublink ${currentPage === 'application-form' ? 'active' : ''}`} 
                                 onClick={navigateToNewApplication}
-                                style={{ cursor: isProfileComplete(profileData) && hasAllDocuments(documents) && hasAcademicRecords(academicRecords) ? 'pointer' : 'not-allowed', opacity: isProfileComplete(profileData) && hasAllDocuments(documents) && hasAcademicRecords(academicRecords) ? 1 : 0.5 }}
+                                style={{ cursor: isLocked || !(isProfileComplete(profileData) && hasAllDocuments(documents) && hasAcademicRecords(academicRecords)) ? 'not-allowed' : 'pointer', opacity: isLocked || !(isProfileComplete(profileData) && hasAllDocuments(documents) && hasAcademicRecords(academicRecords)) ? 0.5 : 1, display: isLocked ? 'none' : undefined }}
                             >
                                 New Application
                                 {(!isProfileComplete(profileData) || !hasAllDocuments(documents) || !hasAcademicRecords(academicRecords)) && <span style={{ marginLeft: '8px', fontSize: '10px' }}>🔒</span>}
@@ -566,7 +609,16 @@ const Dashboard = ({ setView, user }) => {
                 </header>
 
                 <div className="dashboard-content-wrapper">
-                    {currentPage === 'home' && <DashboardHomePage onNavigate={(p) => setCurrentPage(p)} studentInfo={studentInfo} />}
+                    {isLocked && (
+                        <div style={{
+                            background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px',
+                            padding: '14px 18px', marginBottom: '20px', color: '#1e40af',
+                        }}>
+                            <strong>Application Submitted</strong> — Your application is under review. You cannot make changes to your profile, documents, or academic records.
+                        </div>
+                    )}
+
+                    {currentPage === 'home' && <DashboardHomePage onNavigate={(p) => setCurrentPage(p)} studentInfo={studentInfo} isLocked={isLocked} applications={applications} />}
                     
                     {currentPage === 'profile' && (
                         <>
@@ -618,16 +670,22 @@ const Dashboard = ({ setView, user }) => {
                         </>
                     )}
                     
-                    {currentPage === 'personal-docs' && <PersonalDocumentsPage onDocumentChange={refreshDocuments} />}
+                    {currentPage === 'personal-docs' && <PersonalDocumentsPage onDocumentChange={refreshDocuments} readOnly={isLocked} />}
                     {currentPage === 'academic-info' && (
                         <AcademicInformationPage 
                             onAddClick={() => setCurrentPage('add-academic')} 
                             onAcademicRecordChange={refreshAcademicRecords}
+                            readOnly={isLocked}
                         />
                     )}
                     {currentPage === 'add-academic' && <AddAcademicInfoPage onCancel={() => setCurrentPage('academic-info')} />}
-                    {currentPage === 'application-list' && <AdmissionListingPage onCreateNew={() => setCurrentPage('application-form')} />}
-                    {currentPage === 'application-form' && <AdmissionFormPage onCancel={() => setCurrentPage('application-list')} />}
+                    {currentPage === 'application-list' && <AdmissionListingPage onCreateNew={() => setCurrentPage('application-form')} readOnly={isLocked} />}
+                    {currentPage === 'application-form' && (
+                        <AdmissionFormPage
+                            onCancel={() => setCurrentPage('application-list')}
+                            onSubmitted={refreshApplications}
+                        />
+                    )}
                     {currentPage === 'change-password' && <ChangePasswordPage />}
                 </div>
 

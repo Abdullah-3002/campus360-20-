@@ -6,7 +6,7 @@ import { HomeIcon } from '../../Icons';
 import AddressFields from './AddressFields';
 import { getSelectionError, getAddressError } from '../../../utils/validation';
 
-const ResidenceDetailsTab = ({ profileData, updateProfile }) => {
+const ResidenceDetailsTab = ({ profileData, updateProfile, readOnly = false }) => {
     const { token } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
@@ -95,7 +95,7 @@ const ResidenceDetailsTab = ({ profileData, updateProfile }) => {
     };
 
     return (
-        <div className="tab-content-area fade-in">
+        <div className="tab-content-area fade-in" style={readOnly ? { pointerEvents: 'none', opacity: 0.92 } : undefined}>
             <div className="form-card">
                 <div className="section-header">
                     <div className="section-header-icon"><HomeIcon /></div>
@@ -129,6 +129,7 @@ const ResidenceDetailsTab = ({ profileData, updateProfile }) => {
             </div>
 
             <div className="form-actions">
+                {!readOnly && (
                 <button 
                     className="btn-update" 
                     onClick={handleSubmit} 
@@ -143,6 +144,7 @@ const ResidenceDetailsTab = ({ profileData, updateProfile }) => {
                         'Save Address Details'
                     )}
                 </button>
+                )}
             </div>
         </div>
     );

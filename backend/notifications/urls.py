@@ -8,6 +8,7 @@ urlpatterns = [
 
     path('announcements/', views.list_announcements, name='list-announcements'),
     path('announcements/create/', views.create_announcement, name='create-announcement'),
+    path('announcements/target-options/', views.get_announcement_target_options, name='announcement-target-options'),
     path('announcements/<int:announcement_id>/', views.announcement_detail, name='announcement-detail'),
 
     path('admin/send/', views.send_notification, name='send-notification'),
