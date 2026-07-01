@@ -1,53 +1,72 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
+import { apiPost } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { listDepartments, listPrograms } from '../../../services/academicsService';
+import { normalizeList } from '../../../services/api';
 import { PageHeader, useToast } from '../../shared/helpers';
-import { ShieldIcon, UserIcon, LockIcon, MailIcon, PhoneIcon } from '../../Icons';
+import { ShieldIcon, MailIcon, LockIcon } from '../../Icons';
 
 const CredentialsPage = () => {
     const { token } = useAuth();
     const { showToast, Toast } = useToast();
     const [submitting, setSubmitting] = useState(false);
+    const [departments, setDepartments] = useState([]);
+    const [programs, setPrograms] = useState([]);
 
     const [formData, setFormData] = useState({
-        username: '',
         email: '',
         password: '',
         user_type: 'teacher',
-        employment_type: 'permanent',
-        status: 'active',
-        cnic: '',
-        date_of_birth: '',
-        gender: 'Male',
-        phone_number: '',
-        emergency_contact_name: '',
-        emergency_contact_phone: '',
-        emergency_contact_relation: 'Parent',
-        current_address: '',
-        permanent_address: ''
+        department_id: '',
+        program_id: '',
     });
 
+    useEffect(() => {
+        if (!token) return;
+        listDepartments(token).then(d => setDepartments(normalizeList(d))).catch(console.error);
+    }, [token]);
+
+    useEffect(() => {
+        if (!token || !formData.department_id) { setPrograms([]); return; }
+        listPrograms(token, formData.department_id).then(d => setPrograms(normalizeList(d))).catch(console.error);
+    }, [token, formData.department_id]);
+
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData(prev => {
+            const next = { ...prev, [name]: value };
+            if (name === 'department_id') next.program_id = '';
+            if (name === 'user_type' && value === 'admin') {
+                next.department_id = '';
+                next.program_id = '';
+            }
+            return next;
+        });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.username || !formData.email || !formData.password) {
-            alert('Username, Email, and Password are required.');
+        if (!formData.email || !formData.password) {
+            alert('Email and Password are required.');
+            return;
+        }
+        if (formData.user_type === 'teacher' && (!formData.department_id || !formData.program_id)) {
+            alert('Department and Program are required for teachers.');
             return;
         }
         setSubmitting(true);
         try {
-            const res = await axios.post('http://localhost:8000/api/accounts/admin/create-credentials/', formData, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            showToast(res.data.message || 'Credentials created successfully!');
-            setFormData({
-                username: '', email: '', password: '', user_type: 'teacher', employment_type: 'permanent', status: 'active',
-                cnic: '', date_of_birth: '', gender: 'Male', phone_number: '', emergency_contact_name: '', emergency_contact_phone: '',
-                emergency_contact_relation: 'Parent', current_address: '', permanent_address: ''
-            });
+            const username = formData.email.split('@')[0];
+            const res = await apiPost('/admin/create-credentials/', {
+                username,
+                email: formData.email,
+                password: formData.password,
+                user_type: formData.user_type,
+                department_id: formData.department_id || undefined,
+                program_id: formData.program_id || undefined,
+            }, token);
+            showToast(res.message || 'Credentials created successfully!');
+            setFormData({ email: '', password: '', user_type: 'teacher', department_id: '', program_id: '' });
         } catch (error) {
             alert(error.response?.data?.error || 'Failed to create credentials');
         } finally {
@@ -58,128 +77,62 @@ const CredentialsPage = () => {
     return (
         <div className="page-container fade-in">
             {Toast}
-            <PageHeader breadcrumb="DASHBOARD > CREDENTIALS" title="Create Credentials & Staff Profiles" />
+            <PageHeader breadcrumb="DASHBOARD > CREDENTIALS" title="Create User Credentials" />
 
-            <div className="form-card" style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <div className="form-card" style={{ maxWidth: '560px', margin: '0 auto' }}>
                 <form onSubmit={handleSubmit}>
                     <div className="section-header">
                         <div className="section-header-icon"><ShieldIcon /></div>
-                        <h3 className="section-title">User Account & Role Selection</h3>
+                        <h3 className="section-title">Account Credentials</h3>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                        Create login credentials for teachers and admins. Teachers must be assigned a department and program.
+                    </p>
+
+                    <div className="field-group" style={{ marginBottom: '16px' }}>
+                        <label className="field-label">Email Address <span className="required">*</span></label>
+                        <div className="input-wrapper">
+                            <MailIcon />
+                            <input type="email" name="email" className="field-input" value={formData.email} onChange={handleChange} required placeholder="user@university.edu" />
+                        </div>
                     </div>
 
-                    <div className="two-column-grid" style={{ marginBottom: '24px' }}>
-                        <div className="field-group">
-                            <label className="field-label">Username <span className="required">*</span></label>
-                            <input type="text" name="username" className="field-input" value={formData.username} onChange={handleChange} required placeholder="e.g. prof_john" />
-                        </div>
-
-                        <div className="field-group">
-                            <label className="field-label">Email Address <span className="required">*</span></label>
-                            <input type="email" name="email" className="field-input" value={formData.email} onChange={handleChange} required placeholder="e.g. john@university.edu" />
-                        </div>
-
-                        <div className="field-group">
-                            <label className="field-label">Password <span className="required">*</span></label>
+                    <div className="field-group" style={{ marginBottom: '16px' }}>
+                        <label className="field-label">Password <span className="required">*</span></label>
+                        <div className="input-wrapper">
+                            <LockIcon />
                             <input type="password" name="password" className="field-input" value={formData.password} onChange={handleChange} required placeholder="••••••••" />
                         </div>
+                    </div>
 
-                        <div className="field-group">
-                            <label className="field-label">User Role / Type <span className="required">*</span></label>
-                            <select name="user_type" className="field-input field-select" value={formData.user_type} onChange={handleChange}>
-                                <option value="teacher">Teacher (Faculty)</option>
-                                <option value="staff">Staff Member</option>
-                                <option value="admin">Administrator</option>
+                    <div className="field-group" style={{ marginBottom: '16px' }}>
+                        <label className="field-label">User Role <span className="required">*</span></label>
+                        <select name="user_type" className="field-input field-select" value={formData.user_type} onChange={handleChange}>
+                            <option value="teacher">Teacher</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+
+                    {formData.user_type === 'teacher' && (<>
+                        <div className="field-group" style={{ marginBottom: '16px' }}>
+                            <label className="field-label">Department <span className="required">*</span></label>
+                            <select name="department_id" className="field-input field-select" value={formData.department_id} onChange={handleChange} required>
+                                <option value="">Select department</option>
+                                {departments.map(d => <option key={d.department_id} value={d.department_id}>{d.department_name}</option>)}
                             </select>
                         </div>
-                    </div>
+                        <div className="field-group" style={{ marginBottom: '24px' }}>
+                            <label className="field-label">Program <span className="required">*</span></label>
+                            <select name="program_id" className="field-input field-select" value={formData.program_id} onChange={handleChange} required disabled={!formData.department_id}>
+                                <option value="">Select program</option>
+                                {programs.map(p => <option key={p.program_id} value={p.program_id}>{p.program_name}</option>)}
+                            </select>
+                        </div>
+                    </>)}
 
-                    {formData.user_type !== 'admin' && (
-                        <>
-                            <div className="section-header" style={{ marginTop: '20px' }}>
-                                <div className="section-header-icon"><UserIcon /></div>
-                                <h3 className="section-title">Employment & Staff Profile Details</h3>
-                            </div>
-
-                            <div className="two-column-grid" style={{ marginBottom: '24px' }}>
-                                <div className="field-group">
-                                    <label className="field-label">Employment Type</label>
-                                    <select name="employment_type" className="field-input field-select" value={formData.employment_type} onChange={handleChange}>
-                                        <option value="permanent">Permanent</option>
-                                        <option value="visiting">Visiting</option>
-                                        <option value="contractual">Contractual</option>
-                                        <option value="temporary">Temporary</option>
-                                    </select>
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">Employment Status</label>
-                                    <select name="status" className="field-input field-select" value={formData.status} onChange={handleChange}>
-                                        <option value="active">Active</option>
-                                        <option value="on_leave">On Leave</option>
-                                        <option value="resigned">Resigned</option>
-                                        <option value="retired">Retired</option>
-                                    </select>
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">CNIC Number</label>
-                                    <input type="text" name="cnic" className="field-input" placeholder="13 digits" value={formData.cnic} onChange={handleChange} />
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">Date of Birth</label>
-                                    <input type="date" name="date_of_birth" className="field-input" value={formData.date_of_birth} onChange={handleChange} />
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">Gender</label>
-                                    <select name="gender" className="field-input field-select" value={formData.gender} onChange={handleChange}>
-                                        <option value="Male">Male</option>
-                                        <option value="Female">Female</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">Phone Number (11 digits)</label>
-                                    <input type="text" name="phone_number" className="field-input" placeholder="03001234567" value={formData.phone_number} onChange={handleChange} />
-                                </div>
-                            </div>
-
-                            <div className="section-header" style={{ marginTop: '20px' }}>
-                                <div className="section-header-icon"><PhoneIcon /></div>
-                                <h3 className="section-title">Emergency Contact & Address</h3>
-                            </div>
-
-                            <div className="two-column-grid" style={{ marginBottom: '24px' }}>
-                                <div className="field-group">
-                                    <label className="field-label">Emergency Contact Name</label>
-                                    <input type="text" name="emergency_contact_name" className="field-input" value={formData.emergency_contact_name} onChange={handleChange} />
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">Emergency Contact Phone</label>
-                                    <input type="text" name="emergency_contact_phone" className="field-input" value={formData.emergency_contact_phone} onChange={handleChange} />
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">Emergency Contact Relation</label>
-                                    <input type="text" name="emergency_contact_relation" className="field-input" value={formData.emergency_contact_relation} onChange={handleChange} />
-                                </div>
-
-                                <div className="field-group">
-                                    <label className="field-label">Current Address</label>
-                                    <input type="text" name="current_address" className="field-input" value={formData.current_address} onChange={handleChange} />
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    <div className="form-actions">
-                        <button type="submit" className="btn-save" disabled={submitting}>
-                            {submitting ? 'Creating Credentials...' : 'Create Credentials & Create Profile'}
-                        </button>
-                    </div>
+                    <button type="submit" className="btn-save" disabled={submitting} style={{ width: '100%' }}>
+                        {submitting ? 'Creating...' : 'Create Credentials'}
+                    </button>
                 </form>
             </div>
         </div>

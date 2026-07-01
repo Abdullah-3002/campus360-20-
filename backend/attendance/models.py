@@ -61,3 +61,29 @@ class StudentAttendanceSummary(models.Model):
     class Meta:
         db_table = 'student_attendance_summary'
         unique_together = ['student', 'section']
+
+
+class LeaveApplication(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    leave_id = models.AutoField(primary_key=True)
+    student = models.ForeignKey('students.Student', on_delete=models.CASCADE, related_name='leave_applications')
+    section = models.ForeignKey('sections.Section', on_delete=models.CASCADE, related_name='leave_applications')
+    reason = models.TextField()
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='reviewed_leaves'
+    )
+    teacher_remarks = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'leave_application'

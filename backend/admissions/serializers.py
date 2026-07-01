@@ -17,6 +17,35 @@ class AcademicRecordSerializer(serializers.ModelSerializer):
         model = AcademicRecord
         exclude = ['applicant', 'created_at']
 
+    def validate_roll_number(self, value):
+        if value and not value.strip():
+            raise serializers.ValidationError('Roll number cannot be blank if provided.')
+        if value and len(value.strip()) < 3:
+            raise serializers.ValidationError('Roll number must be at least 3 characters.')
+        return value.strip() if value else value
+
+    def validate(self, attrs):
+        start_year = attrs.get('start_year')
+        end_year = attrs.get('end_year')
+        if start_year and end_year and end_year <= start_year:
+            raise serializers.ValidationError({'end_year': 'End year must be after start year.'})
+
+        obtained = attrs.get('obtained')
+        total = attrs.get('total')
+        if obtained is not None and total is not None:
+            if total <= 0:
+                raise serializers.ValidationError({'total': 'Total marks must be greater than zero.'})
+            if obtained < 0:
+                raise serializers.ValidationError({'obtained': 'Obtained marks cannot be negative.'})
+            if obtained > total:
+                raise serializers.ValidationError({'obtained': 'Obtained marks cannot exceed total marks.'})
+
+        level = attrs.get('qualification_level', '')
+        if level not in ('matric', 'inter'):
+            raise serializers.ValidationError({'qualification_level': 'Only Matric and Intermediate levels are allowed.'})
+
+        return attrs
+
 
 class ProgramPreferenceSerializer(serializers.ModelSerializer):
     program_name = serializers.CharField(source='program.program_name', read_only=True)

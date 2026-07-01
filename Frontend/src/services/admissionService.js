@@ -177,11 +177,10 @@ export const deleteDocument = async (documentId, token) => {
 // ADMIN ADMISSIONS
 // ============================================
 
-export const adminListApplications = async (token, statusFilter = '') => {
-  const params = statusFilter ? { status: statusFilter } : {};
+export const adminListApplications = async (token, filters = {}) => {
   const response = await axios.get(`${BASE_URL}/admin/applications/`, {
     ...getAuthHeader(token),
-    params,
+    params: filters,
   });
   return response.data;
 };
@@ -226,10 +225,41 @@ export const adminVerifyDocument = async (applicationId, docId, token) => {
   return response.data;
 };
 
+export const adminReviewChallan = async (applicationId, action, remarks, token) => {
+  const response = await axios.post(
+    `${BASE_URL}/admin/applications/${applicationId}/challan-review/`,
+    { action, remarks },
+    getAuthHeader(token)
+  );
+  return response.data;
+};
+
+export const adminDeleteApplication = async (applicationId, token) => {
+  const response = await axios.delete(
+    `${BASE_URL}/admin/applications/${applicationId}/delete/`,
+    getAuthHeader(token)
+  );
+  return response.data;
+};
+
 export const isApplicationLocked = (applications) => {
-  const lockedStatuses = ['pending', 'under_review', 'documents_pending', 'approved', 'rejected', 'waitlist', 'registered'];
+  const lockedStatuses = ['pending', 'challan_pending', 'under_review', 'documents_pending', 'approved', 'rejected', 'waitlist', 'registered'];
   const apps = Array.isArray(applications) ? applications : [];
   return apps.some(app => lockedStatuses.includes(app.status));
+};
+
+export const getApplicationChallanPending = (applications) => {
+  const apps = Array.isArray(applications) ? applications : [];
+  return apps.find(app => app.status === 'challan_pending');
+};
+
+export const downloadAdmissionChallan = async (token, format = 'pdf') => {
+  const response = await axios.get(`${BASE_URL}/challan/download/`, {
+    ...getAuthHeader(token),
+    params: format === 'json' ? { format: 'json' } : {},
+    responseType: format === 'pdf' ? 'blob' : 'json',
+  });
+  return response;
 };
 
 export const hasRejectedApplication = (applications) => {

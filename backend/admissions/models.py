@@ -66,6 +66,7 @@ class AdmissionApplication(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
         ('pending','Pending'),
+        ('challan_pending', 'Challan Pending'),
         ('under_review','Under Review'),
         ('documents_pending', 'Documents Pending'),
         ('approved','Approved'),
@@ -99,6 +100,10 @@ class AdmissionApplication(models.Model):
     is_fee_paid = models.BooleanField(default=False)
     is_eligible = models.BooleanField(null=True, blank=True)
     is_documents_verified = models.BooleanField(default=False)
+    admission_challan_number = models.CharField(max_length=50, blank=True)
+    admission_challan_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    challan_paid = models.BooleanField(default=False)
+    rejection_message = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -135,6 +140,7 @@ class ApplicantDocument(models.Model):
         ('matric_certificate', 'Matric Certificate'),
         ('inter_marksheet', 'Inter Marksheet'),
         ('inter_certificate', 'Inter Certificate'),
+        ('paid_challan', 'Paid Admission Challan'),
     ]
     
     document_id = models.AutoField(primary_key=True)

@@ -25,21 +25,53 @@ def get_my_student_profile(request):
 @api_view(['GET'])
 @permission_classes([IsAdmin])
 def list_students(request):
-    students = Student.objects.select_related('user', 'program').all()
+    students = Student.objects.select_related('user', 'program', 'program__department').all()
     status_filter = request.query_params.get('status')
     if status_filter:
         students = students.filter(status=status_filter)
-    return Response(StudentSerializer(students, many=True).data)
+    dept = request.query_params.get('department')
+    if dept:
+        students = students.filter(program__department__department_id=dept)
+    program = request.query_params.get('program')
+    if program:
+        students = students.filter(program__program_id=program)
+
+    data = StudentSerializer(students, many=True).data
+    return Response({
+        'count': len(data),
+        'students': data,
+    })
 
 
 @api_view(['GET'])
 @permission_classes([IsAdmin])
 def get_student(request, student_id):
     try:
-        student = Student.objects.select_related('user', 'program', 'profile').get(student_id=student_id)
-        return Response(StudentSerializer(student).data)
+        student = Student.objects.select_related(
+            'user', 'program', 'program__department', 'profile', 'applicant'
+        ).get(student_id=student_id)
     except Student.DoesNotExist:
         return Response({'error': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    payload = StudentSerializer(student).data
+    payload['department_name'] = student.program.department.department_name
+    if student.applicant_id:
+        from admissions.models import ApplicantDocument, AcademicRecord
+        from admissions.serializers import ApplicantDocumentSerializer, AcademicRecordSerializer
+        payload['applicant_documents'] = ApplicantDocumentSerializer(
+            ApplicantDocument.objects.filter(applicant=student.applicant), many=True
+        ).data
+        payload['academic_records'] = AcademicRecordSerializer(
+            AcademicRecord.objects.filter(applicant=student.applicant), many=True
+        ).data
+        payload['applicant_profile'] = {
+            'first_name': student.applicant.first_name,
+            'last_name': student.applicant.last_name,
+            'cnic': student.applicant.cnic,
+            'phone': student.applicant.phone,
+            'email': student.user.email,
+        }
+    return Response(payload)
 
 
 @api_view(['POST'])

@@ -21,10 +21,10 @@ ADMISSION_DEPARTMENTS = [
         'department_code': 'FENG',
         'department_name': 'Faculty of Engineering',
         'programs': [
-            {'program_name': 'BS Computer Engineering', 'program_code': 'BSCEN', 'degree_level': 'BS', 'duration_years': 4},
-            {'program_name': 'BS Electrical Engineering', 'program_code': 'BSEE', 'degree_level': 'BS', 'duration_years': 4},
-            {'program_name': 'BS Civil Engineering', 'program_code': 'BSCE', 'degree_level': 'BS', 'duration_years': 4},
-            {'program_name': 'BS Mechanical Engineering', 'program_code': 'BSME', 'degree_level': 'BS', 'duration_years': 4},
+            {'program_name': 'Computer Engineering', 'program_code': 'CEN', 'degree_level': 'BS', 'duration_years': 4},
+            {'program_name': 'Electrical Engineering', 'program_code': 'EE', 'degree_level': 'BS', 'duration_years': 4},
+            {'program_name': 'Civil Engineering', 'program_code': 'CE', 'degree_level': 'BS', 'duration_years': 4},
+            {'program_name': 'Mechanical Engineering', 'program_code': 'ME', 'degree_level': 'BS', 'duration_years': 4},
         ],
     },
     {
@@ -33,7 +33,7 @@ ADMISSION_DEPARTMENTS = [
         'programs': [
             {'program_name': 'MBBS', 'program_code': 'MBBS', 'degree_level': 'BS', 'duration_years': 5},
             {'program_name': 'BDS', 'program_code': 'BDS', 'degree_level': 'BS', 'duration_years': 4},
-            {'program_name': 'Pharm D', 'program_code': 'PHARMD', 'degree_level': 'ADP', 'duration_years': 5},
+            {'program_name': 'Pharm-D', 'program_code': 'PHARMD', 'degree_level': 'ADP', 'duration_years': 5},
             {'program_name': 'DPT', 'program_code': 'DPT', 'degree_level': 'BS', 'duration_years': 5},
             {'program_name': 'BS Biotechnology', 'program_code': 'BSBIOT', 'degree_level': 'BS', 'duration_years': 4},
         ],
@@ -43,7 +43,7 @@ ADMISSION_DEPARTMENTS = [
         'department_name': 'Faculty of Business & Management Sciences',
         'programs': [
             {'program_name': 'BBA', 'program_code': 'BBA', 'degree_level': 'BS', 'duration_years': 4},
-            {'program_name': 'BS Accounting and Finance', 'program_code': 'BSAF', 'degree_level': 'BS', 'duration_years': 4},
+            {'program_name': 'BS Accounting & Finance', 'program_code': 'BSAF', 'degree_level': 'BS', 'duration_years': 4},
             {'program_name': 'BS Economics', 'program_code': 'BSECO', 'degree_level': 'BS', 'duration_years': 4},
             {'program_name': 'BS Commerce', 'program_code': 'BSCOM', 'degree_level': 'BS', 'duration_years': 4},
         ],

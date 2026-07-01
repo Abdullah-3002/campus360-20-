@@ -1,13 +1,11 @@
-// src/dashboard/Pages/AdmissionFormPage.jsx - Updated version
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext'; 
 import { submitApplication, getMyApplications, getAdmissionPrograms } from '../../../services/admissionService';
-import { PlusIcon, TrashIcon, XIcon, CheckIcon, SparklesIcon, ArrowRightIcon, InfoIcon } from '../../Icons';
+import { saveFormDraft, loadFormDraft, clearFormDraft } from '../../../utils/formDraft';
+import { PlusIcon, TrashIcon, XIcon, CheckIcon, InfoIcon } from '../../Icons';
 
 const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, hasExistingApp = false }) => {
-    const [activeTab, setActiveTab] = useState('detail');
-    const [appType, setAppType] = useState('Regular');
+    const [activeTab, setActiveTab] = useState('preferences');
     const [preferences, setPreferences] = useState([]);
     const [availablePrograms, setAvailablePrograms] = useState([]);
     const [programsLoading, setProgramsLoading] = useState(true);
@@ -18,7 +16,7 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
     const [submitting, setSubmitting] = useState(false);
     const [loading, setLoading] = useState(false);
     const [formErrors, setFormErrors] = useState({});
-    const { token } = useAuth();
+    const { token, user } = useAuth();
 
     const [formData, setFormData] = useState({
         program: '',
@@ -43,37 +41,17 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
     }, [token]);
 
     useEffect(() => {
-        if (editApplicationId) {
-            loadApplicationData();
+        if (user?.user_id) {
+            const draft = loadFormDraft(user.user_id, 'application');
+            if (draft?.preferences) setPreferences(draft.preferences);
         }
-    }, [editApplicationId]);
+    }, [user?.user_id]);
 
-    const loadApplicationData = async () => {
-        setLoading(true);
-        try {
-            const applications = await getMyApplications(token);
-            const application = applications.find(app => app.id === editApplicationId);
-            if (application) {
-                setAppType(application.admission_type || 'Regular');
-                if (application.preferences) {
-                    const loadedPrefs = application.preferences.map((pref, index) => ({
-                        id: pref.id || Date.now() + index,
-                        sr: index + 1,
-                        program_id: pref.program,
-                        program: pref.program_name || pref.program,
-                        preference: pref.preference_order,
-                        preference_label: `${pref.preference_order}${pref.preference_order === 1 ? 'st' : pref.preference_order === 2 ? 'nd' : 'rd'} Preference`,
-                        department: pref.department_name || pref.department
-                    }));
-                    setPreferences(loadedPrefs);
-                }
-            }
-        } catch (error) {
-            console.error('Failed to load application:', error);
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        if (user?.user_id) {
+            saveFormDraft(user.user_id, 'application', { preferences });
         }
-    };
+    }, [preferences, user?.user_id]);
 
     const getSelectedProgram = (programId) => {
         return availablePrograms.find(p => String(p.program_id) === String(programId));
@@ -177,7 +155,7 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
         
         try {
             const applicationData = {
-                admission_type: appType,
+                admission_type: 'Regular',
                 preferences: preferences.map(p => ({
                     program_id: p.program_id,
                     program: p.program,
@@ -188,7 +166,16 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
             };
             
             const result = await submitApplication(applicationData, token);
+
+            if (result.rejected) {
+                alert(result.message || 'Your application has been rejected due to program requirements.');
+                if (user?.user_id) clearFormDraft(user.user_id, 'application');
+                if (onSubmitted) onSubmitted();
+                onCancel();
+                return;
+            }
             
+            if (user?.user_id) clearFormDraft(user.user_id, 'application');
             setShowSuccessModal(true);
             console.log('Application saved:', result.application_number);
             
@@ -209,10 +196,16 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
         }
     };
 
+    const getNextPreferenceOrder = () => {
+        if (preferences.length === 0) return 1;
+        if (preferences.length === 1) return 2;
+        if (preferences.length === 2) return 3;
+        return null;
+    };
+
     const getAvailablePreferences = () => {
-        const usedPrefs = preferences.map(p => parseInt(p.preference));
-        const allPrefs = [1, 2, 3];
-        return allPrefs.filter(p => !usedPrefs.includes(p));
+        const next = getNextPreferenceOrder();
+        return next ? [next] : [];
     };
 
     if (loading || programsLoading) {
@@ -227,92 +220,19 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
         <div className="page-container fade-in">
             <div className="page-header-minimal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <div className="breadcrumb-minimal">DASHBOARD &gt; ADMISSION &gt; {editApplicationId ? 'EDIT APPLICATION' : 'NEW APPLICATION'}</div>
-                    <h1 className="page-title-minimal">{editApplicationId ? 'Edit Application' : 'Create Application'}</h1>
+                    <div className="breadcrumb-minimal">DASHBOARD &gt; ADMISSION &gt; NEW APPLICATION</div>
+                    <h1 className="page-title-minimal">Create Application</h1>
                 </div>
-                <button className="btn-verify" onClick={onCancel} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ArrowRightIcon /> Back to List
-                </button>
+                <button className="btn-verify" onClick={onCancel}>Back to List</button>
             </div>
 
-            {/* Internal Tabs */}
-            <div className="application-tabs">
-                <button 
-                    className={`app-tab ${activeTab === 'detail' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('detail')}
-                >
-                    Application Detail
-                </button>
-                <button 
-                    className={`app-tab ${activeTab === 'preferences' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('preferences')}
-                >
-                    Program Preferences {preferences.length > 0 && `(${preferences.length})`}
-                </button>
-            </div>
-
-            {/* Tab: Detail */}
-            {activeTab === 'detail' && (
-                <div className="form-card fade-in">
-                    <div className="info-banner" style={{ marginBottom: '20px' }}>
-                        <InfoIcon />
-                        <div>
-                            <strong>Important:</strong> Please review your application details before proceeding to program preferences.
-                        </div>
-                    </div>
-                    
-                    <div className="two-column-grid">
-                        <div className="field-group">
-                            <label className="field-label">Application Number</label>
-                            <input 
-                                type="text" 
-                                className="field-input" 
-                                value={`APP-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`} 
-                                readOnly 
-                                style={{ background: '#f8fafc', color: '#64748b' }} 
-                            />
-                        </div>
-                        <div className="field-group">
-                            <label className="field-label">Application Date</label>
-                            <input 
-                                type="text" 
-                                className="field-input" 
-                                value={new Date().toLocaleDateString()} 
-                                readOnly 
-                                style={{ background: '#f8fafc', color: '#64748b' }} 
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="field-group">
-                        <label className="field-label">Admission Type <span className="required">*</span></label>
-                        <select 
-                            className="field-input field-select" 
-                            value={appType} 
-                            onChange={(e) => setAppType(e.target.value)}
-                        >
-                            <option value="Regular">Regular (Semester 1)</option>
-                            <option value="Lateral">Lateral (Semester 5)</option>
-                            <option value="Migration">Migration</option>
-                        </select>
-                    </div>
-                    
-                    <div className="info-banner compact" style={{ marginTop: '20px', background: '#fef3c7', borderColor: '#f59e0b' }}>
-                        <InfoIcon />
-                        <span>You can add program preferences in the next tab. Please add at least one preference.</span>
-                    </div>
-                    
-                    <div className="form-actions" style={{ marginTop: '20px' }}>
-                        <button className="btn-update" onClick={() => setActiveTab('preferences')}>
-                            Continue to Preferences
-                        </button>
+            <div className="form-card fade-in">
+                <div className="info-banner" style={{ marginBottom: '20px' }}>
+                    <InfoIcon />
+                    <div>
+                        <strong>Program Preferences:</strong> Select your 1st preference first, then optionally add 2nd and 3rd preferences in order. Admission type is Regular by default.
                     </div>
                 </div>
-            )}
-
-            {/* Tab: Preferences */}
-            {activeTab === 'preferences' && (
-                <div className="form-card fade-in">
                     <div className="two-column-grid">
                         <div className="field-group">
                             <label className="field-label">Pick a Program <span className="required">*</span></label>
@@ -347,20 +267,13 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
                         </div>
                     </div>
                     
-                    <div style={{ marginBottom: '25px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ marginBottom: '25px' }}>
                         <button 
                             className="btn-add" 
-                            disabled={!formData.program || !formData.preference || submitting}
+                            disabled={!formData.program || !formData.preference || submitting || preferences.length >= 3}
                             onClick={handleAddClick}
                         >
                             <PlusIcon /> <span>ADD PREFERENCE</span>
-                        </button>
-                        <button 
-                            className="btn-ai-recommend"
-                            onClick={() => alert("AI Recommendation feature is coming soon! Based on your academic profile, we'll suggest the best programs for you.")}
-                            title="Get AI-powered degree suggestions based on your profile"
-                        >
-                            <SparklesIcon size={16} /> <span>AI Degree Recommendation</span>
                         </button>
                     </div>
                     
@@ -412,9 +325,9 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
                     </div>
                     
                     {preferences.length > 0 && (
-                        <div className="info-banner compact" style={{ marginTop: '20px', background: '#dbeafe', borderColor: '#3b82f6' }}>
+                        <div className="info-banner compact" style={{ marginTop: '20px' }}>
                             <CheckIcon />
-                            <span>You have added {preferences.length} preference(s). Higher preference numbers indicate higher priority.</span>
+                            <span>You have added {preferences.length} preference(s). Select preferences in order: 1st, then 2nd, then 3rd.</span>
                         </div>
                     )}
                     
@@ -427,8 +340,7 @@ const AdmissionFormPage = ({ onCancel, onSubmitted, editApplicationId = null, ha
                             {submitting ? 'Submitting...' : 'Submit Application'}
                         </button>
                     </div>
-                </div>
-            )}
+            </div>
 
             {/* Success Toast */}
             {showToast && (

@@ -14,4 +14,5 @@ urlpatterns = [
     
     # Section Students
     path('<int:section_id>/students/', views.get_section_students, name='section-students'),
+    path('<int:section_id>/submit-marks/', views.submit_final_marks, name='submit-final-marks'),
 ]

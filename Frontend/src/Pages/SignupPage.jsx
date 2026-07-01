@@ -259,14 +259,10 @@ const SignupPage = ({ setView }) => {
                                 <div className="form-group form-row-full">
                                     <label>Phone Number <span className="required">*</span></label>
                                     <div className="input-wrapper">
-                                        <div style={{ position: 'absolute', left: '15px', fontWeight: '600', color: 'var(--dark-gray)', borderRight: '1px solid #e5e7eb', paddingRight: '10px', zIndex: 1 }}>
-                                            +92
-                                        </div>
                                         <input 
                                             type="tel" 
                                             className="form-input-with-icon" 
-                                            placeholder="3001234567" 
-                                            style={{ paddingLeft: '70px' }} 
+                                            placeholder="03001234567" 
                                             value={formData.phone}
                                             onChange={handlePhoneChange}
                                             required 
@@ -371,8 +367,10 @@ const SignupPage = ({ setView }) => {
                         </form>
 
                         <div className="bottom-text">
-                            Already have an account? <br />
-                            <button className="login-link-btn" onClick={() => setView('login')}>Login</button>
+                            Already have an account?
+                            <button type="button" className="login-beautiful-btn" onClick={() => setView('login')}>
+                                Sign In to Your Account
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../shared/DashboardLayout';
 import { LayoutDashboardIcon, BookIcon, ClipboardIcon, FileTextIcon, BellIcon, ShieldIcon, UserIcon } from '../Icons';
 import StudentDashboardHomePage from './DashboardHomePage';
-import { MyEnrollmentsPage, MyGradesPage, MyAttendancePage, MyFeesPage, MyComplaintsPage, MyNotificationsPage } from './Pages/StudentModulePages';
+import { MyEnrollmentsPage, MyGradesPage, MyAttendancePage, MyFeesPage, MyComplaintsPage, MyNotificationsPage, MyAnnouncementsPage, MyLeavesPage } from './Pages/StudentModulePages';
 import ChangePasswordPage from '../applicant/Pages/ChangePasswordPage';
 import { LoadingSpinner } from '../shared/helpers';
 
@@ -85,6 +85,8 @@ const StudentDashboard = ({ setView }) => {
         { id: 'attendance', label: 'My Attendance', icon: <ClipboardIcon size={20} /> },
         { id: 'fees', label: 'My Fees', icon: <FileTextIcon /> },
         { id: 'complaints', label: 'My Complaints', icon: <BellIcon size={20} /> },
+        { id: 'announcements', label: 'Announcements', icon: <BellIcon size={20} /> },
+        { id: 'leaves', label: 'Leave Applications', icon: <ClipboardIcon size={20} /> },
         { id: 'notifications', label: 'Notifications', icon: <BellIcon size={20} /> },
         { id: 'change-password', label: 'Change Password', icon: <ShieldIcon /> },
     ];
@@ -97,6 +99,8 @@ const StudentDashboard = ({ setView }) => {
             case 'attendance': return <MyAttendancePage />;
             case 'fees': return <MyFeesPage />;
             case 'complaints': return <MyComplaintsPage />;
+            case 'announcements': return <MyAnnouncementsPage />;
+            case 'leaves': return <MyLeavesPage />;
             case 'notifications': return <MyNotificationsPage />;
             case 'change-password': return <ChangePasswordPage />;
             default: return <StudentDashboardHomePage onNavigate={setCurrentPage} />;

@@ -24,7 +24,7 @@ const StaffDashboardHomePage = ({ onNavigate }) => {
                 setStats([
                     { label: 'Students', value: count(students).toLocaleString(), icon: <UserIcon size={20} />, color: '#3b82f6', bg: '#eff6ff' },
                     { label: 'Complaints', value: count(complaints).toString(), icon: <BellIcon size={20} />, color: '#ef4444', bg: '#fef2f2' },
-                    { label: 'Notifications', value: count(notifs).toString(), icon: <BellIcon size={20} />, color: '#8b5cf6', bg: '#f5f3ff' },
+                    { label: 'Notifications', value: count(notifs).toString(), icon: <BellIcon size={20} />, color: '#4169E1', bg: '#eef2ff' },
                     { label: 'Challans', value: count(challans).toString(), icon: <FileIcon />, color: '#f59e0b', bg: '#fffbeb' },
                 ]);
             } catch (e) { console.error(e); }

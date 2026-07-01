@@ -1,7 +1,7 @@
 import React from 'react';
 import { LogOutIcon } from '../../Icons';
 
-const RejectedApplicationView = ({ onLogout, username }) => (
+const RejectedApplicationView = ({ onLogout, username, rejectionReason }) => (
     <div className="dashboard-layout fade-in" style={{ minHeight: '100vh' }}>
         <main className="dashboard-main" style={{ marginLeft: 0, width: '100%' }}>
             <header className="dashboard-header">
@@ -34,6 +34,11 @@ const RejectedApplicationView = ({ onLogout, username }) => (
                     <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '8px' }}>
                         Kindly Contact in University
                     </p>
+                    {rejectionReason && (
+                        <p style={{ fontSize: '0.95rem', color: 'var(--text-tertiary)', lineHeight: 1.5, marginTop: '12px', padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                            <strong>Reason:</strong> {rejectionReason}
+                        </p>
+                    )}
                     {username && (
                         <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginTop: '16px' }}>
                             Account: {username}

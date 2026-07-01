@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import ThemeToggle from '../../components/ThemeToggle';
 import '../../Dashboard.css';
-import { SearchIcon, UserIcon, LogOutIcon } from '../Icons';
+import { UserIcon, LogOutIcon } from '../Icons';
 
 const DashboardLayout = ({
     roleLabel,
@@ -100,17 +101,12 @@ const DashboardLayout = ({
                         <div className="header-logo-icon" style={{ display: 'flex', alignItems: 'center' }}>
                             <img src="/campus360-logo.png" alt="Campus 360" style={{ height: '36px', objectFit: 'contain', borderRadius: '5px' }} />
                         </div>
-                        <div className="header-logo-text" style={{ fontWeight: '700', fontSize: '1.25rem', color: '#1e293b', letterSpacing: '-0.5px' }}>
+                        <div className="header-logo-text">
                             Campus 360
                         </div>
                     </div>
-                    <div className="header-center">
-                        <div className="search-bar">
-                            <span style={{ color: '#9ca3af', display: 'flex' }}><SearchIcon /></span>
-                            <input type="text" placeholder="Search..." className="search-input" />
-                        </div>
-                    </div>
-                    <div className="header-right">
+                    <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <ThemeToggle showLabel />
                         <div className="header-profile" onClick={() => setProfileOpen(!profileOpen)}>
                             <img
                                 src={profileImage || '/student-avatar.jpg'}

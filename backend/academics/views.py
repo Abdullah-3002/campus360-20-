@@ -6,7 +6,8 @@ from accounts.permissions import IsAdmin
 from .models import Department, DegreeProgram, Semester, Course, ProgramCourse
 from .serializers import (
     DepartmentSerializer, DegreeProgramSerializer,
-    SemesterSerializer, CourseSerializer, ProgramCourseSerializer
+    SemesterSerializer, CourseSerializer, ProgramCourseSerializer,
+    ProgramCourseCreateSerializer,
 )
 
 
@@ -15,7 +16,11 @@ from .serializers import (
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_departments(request):
-    departments = Department.objects.filter(is_active=True)
+    departments = Department.objects.all().order_by('department_name')
+    if request.query_params.get('active_only') == '1':
+        departments = departments.filter(is_active=True)
+    elif request.user.user_type != 'admin':
+        departments = departments.filter(is_active=True)
     return Response(DepartmentSerializer(departments, many=True).data)
 
 
@@ -47,9 +52,13 @@ def department_detail(request, department_id):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    department.is_active = False
-    department.save(update_fields=['is_active'])
-    return Response({'message': 'Department deactivated.'}, status=status.HTTP_200_OK)
+    if department.programs.exists():
+        return Response(
+            {'error': 'Cannot delete department with linked programs. Remove programs first.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    department.delete()
+    return Response({'message': 'Department deleted.'}, status=status.HTTP_200_OK)
 
 
 # ── DEGREE PROGRAMS ────────────────────────────────────────────
@@ -58,13 +67,18 @@ def department_detail(request, department_id):
 @permission_classes([IsAuthenticated])
 def list_programs(request):
     programs = DegreeProgram.objects.select_related('department').filter(is_active=True)
+    dept = request.query_params.get('department')
+    if dept:
+        programs = programs.filter(department__department_id=dept)
     return Response(DegreeProgramSerializer(programs, many=True).data)
 
 
 @api_view(['POST'])
 @permission_classes([IsAdmin])
 def create_program(request):
-    serializer = DegreeProgramSerializer(data=request.data)
+    data = request.data.copy()
+    data['program_type'] = 'morning'
+    serializer = DegreeProgramSerializer(data=data)
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -83,15 +97,16 @@ def program_detail(request, program_id):
         return Response(DegreeProgramSerializer(program).data)
 
     if request.method == 'PUT':
-        serializer = DegreeProgramSerializer(program, data=request.data, partial=True)
+        data = request.data.copy()
+        data.pop('program_type', None)
+        serializer = DegreeProgramSerializer(program, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    program.is_active = False
-    program.save(update_fields=['is_active'])
-    return Response({'message': 'Program deactivated.'}, status=status.HTTP_200_OK)
+    program.delete()
+    return Response({'message': 'Program deleted.'}, status=status.HTTP_200_OK)
 
 
 # ── SEMESTERS ─────────────────────────────────────────────────
@@ -148,8 +163,14 @@ def get_current_semester(request):
 def list_courses(request):
     courses = Course.objects.select_related('department').filter(is_active=True)
     dept = request.query_params.get('department')
+    program = request.query_params.get('program')
     if dept:
         courses = courses.filter(department__department_id=dept)
+    if program:
+        course_ids = ProgramCourse.objects.filter(
+            program__program_id=program
+        ).values_list('course_id', flat=True)
+        courses = courses.filter(course_id__in=course_ids)
     return Response(CourseSerializer(courses, many=True).data)
 
 
@@ -191,17 +212,59 @@ def course_detail(request, course_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_program_courses(request, program_id):
-    courses = ProgramCourse.objects.select_related('course', 'program').filter(
-        program__program_id=program_id
-    ).order_by('semester_number')
+    courses = ProgramCourse.objects.select_related(
+        'course', 'course__department', 'program'
+    ).filter(program__program_id=program_id).order_by('semester_number', 'course__course_code')
+    sem = request.query_params.get('semester')
+    if sem:
+        courses = courses.filter(semester_number=sem)
     return Response(ProgramCourseSerializer(courses, many=True).data)
 
 
 @api_view(['POST'])
 @permission_classes([IsAdmin])
 def add_program_course(request):
-    serializer = ProgramCourseSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer = ProgramCourseCreateSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    try:
+        program = DegreeProgram.objects.get(program_id=data['program'])
+        department = Department.objects.get(department_id=data['department'])
+    except (DegreeProgram.DoesNotExist, Department.DoesNotExist):
+        return Response({'error': 'Invalid program or department.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    course, _ = Course.objects.update_or_create(
+        course_code=data['course_code'],
+        defaults={
+            'department': department,
+            'course_name': data['course_name'],
+            'credit_hours': data['credit_hours'],
+            'theory_credit_hours': data['theory_credit_hours'],
+            'lab_credit_hours': data['lab_credit_hours'],
+            'course_type': data['course_type'],
+            'is_active': True,
+        },
+    )
+
+    is_core = data['course_type'] == 'core'
+    pc, created = ProgramCourse.objects.update_or_create(
+        program=program,
+        course=course,
+        semester_number=data['semester_number'],
+        defaults={'is_core': is_core},
+    )
+    status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return Response(ProgramCourseSerializer(pc).data, status=status_code)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAdmin])
+def remove_program_course(request, program_course_id):
+    try:
+        pc = ProgramCourse.objects.get(program_course_id=program_course_id)
+    except ProgramCourse.DoesNotExist:
+        return Response({'error': 'Program course mapping not found.'}, status=status.HTTP_404_NOT_FOUND)
+    pc.delete()
+    return Response({'message': 'Program course removed.'})

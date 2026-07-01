@@ -56,12 +56,52 @@ def my_complaints(request):
 def list_all_complaints(request):
     qs = Complaint.objects.select_related('category', 'submitted_by').all()
     status_filter = request.query_params.get('status')
+    active_only = request.query_params.get('active') == 'true'
+    if active_only:
+        qs = qs.exclude(status='resolved')
     if status_filter:
         qs = qs.filter(status=status_filter)
     return Response(ComplaintSerializer(qs, many=True).data)
 
 
-@api_view(['GET', 'PUT'])
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def admin_update_complaint_status(request, complaint_id):
+    try:
+        complaint = Complaint.objects.select_related('submitted_by').get(complaint_id=complaint_id)
+    except Complaint.DoesNotExist:
+        return Response({'error': 'Complaint not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    new_status = request.data.get('status')
+    admin_response = request.data.get('admin_response', '').strip()
+
+    if new_status not in ('in_progress', 'resolved'):
+        return Response({'error': 'Status must be in_progress (under review) or resolved.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if new_status == 'resolved' and not admin_response:
+        return Response({'error': 'Admin response message is required when resolving a complaint.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    old_status = complaint.status
+    complaint.status = new_status
+    if new_status == 'resolved':
+        complaint.admin_response = admin_response
+        complaint.resolved_at = timezone.now()
+        complaint.save(update_fields=['status', 'admin_response', 'resolved_at'])
+    else:
+        complaint.save(update_fields=['status'])
+
+    ComplaintLog.objects.create(
+        complaint=complaint,
+        action_type='updated',
+        performed_by=request.user,
+        previous_status=old_status,
+        new_status=new_status,
+        remarks=admin_response or 'Status updated to under review.',
+    )
+    return Response(ComplaintSerializer(complaint).data)
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def complaint_detail(request, complaint_id):
     try:
@@ -71,6 +111,14 @@ def complaint_detail(request, complaint_id):
 
     if request.method == 'GET':
         return Response(ComplaintSerializer(complaint).data)
+
+    if request.method == 'DELETE':
+        if complaint.submitted_by != request.user:
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        if complaint.status == 'resolved':
+            return Response({'error': 'Resolved complaints cannot be deleted.'}, status=status.HTTP_400_BAD_REQUEST)
+        complaint.delete()
+        return Response({'message': 'Complaint deleted successfully.'})
 
     if complaint.submitted_by != request.user and request.user.user_type != 'admin':
         return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)

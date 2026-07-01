@@ -15,7 +15,7 @@ from accounts.models import User
 from academics.models import Department, DegreeProgram, Semester, Course, ProgramCourse
 from academics.admission_programs import ADMISSION_DEPARTMENTS
 from faculty.models import Designation, Faculty
-from sections.models import Section
+from sections.models import Section, BatchSection
 from complaints.models import ComplaintCategory
 from fees.models import FeeStructure
 from notifications.models import NotificationType
@@ -64,6 +64,10 @@ NOTIFICATION_TYPES = [
     ('General', 'General campus notifications'),
 ]
 
+BATCH_SECTIONS = ['Blue', 'Grey']
+
+from academics.curriculum_cs_programs import PROGRAM_CURRICULA, DEPARTMENT_CODE
+
 
 class Command(BaseCommand):
     help = 'Seed ERP data: semester, courses, sections, faculty, fees, complaints'
@@ -75,7 +79,8 @@ class Command(BaseCommand):
                 'department': department,
                 'course_name': course_data['course_name'],
                 'credit_hours': course_data['credit_hours'],
-                'theory_credit_hours': course_data['credit_hours'],
+                'theory_credit_hours': course_data.get('theory_credit_hours', course_data['credit_hours']),
+                'lab_credit_hours': course_data.get('lab_credit_hours', 0),
                 'course_type': course_data['course_type'],
                 'is_active': True,
             },
@@ -217,8 +222,42 @@ class Command(BaseCommand):
                 defaults={'description': desc},
             )
 
+        batch_sections_created = 0
+        all_programs = DegreeProgram.objects.filter(is_active=True)
+        for program in all_programs:
+            for section_name in BATCH_SECTIONS:
+                _, created = BatchSection.objects.update_or_create(
+                    section_name=section_name,
+                    batch_year=year,
+                    program=program,
+                )
+                if created:
+                    batch_sections_created += 1
+
+        cs_links = 0
+        fcit = Department.objects.filter(department_code=DEPARTMENT_CODE).first()
+        if fcit:
+            for program_code, semesters in PROGRAM_CURRICULA.items():
+                program = DegreeProgram.objects.filter(program_code=program_code).first()
+                if not program:
+                    continue
+                for sem_num, course_list in semesters.items():
+                    for course_data in course_list:
+                        course, _ = self._ensure_course(fcit, course_data)
+                        _, linked = ProgramCourse.objects.update_or_create(
+                            program=program,
+                            course=course,
+                            semester_number=sem_num,
+                            defaults={'is_core': course_data['course_type'] == 'core'},
+                        )
+                        if linked:
+                            cs_links += 1
+                        if sem_num == 1:
+                            self._ensure_section(course, semester, faculty)
+
         self.stdout.write(self.style.SUCCESS(
             f'ERP seed complete: semester={semester.semester_name}, '
             f'courses={courses_created}, program_course_links={program_links}, '
-            f'sections={sections_created}, faculty={faculty.employee_code}'
+            f'sections={sections_created}, faculty={faculty.employee_code}, '
+            f'batch_sections={batch_sections_created}, cs_course_links={cs_links}'
         ))

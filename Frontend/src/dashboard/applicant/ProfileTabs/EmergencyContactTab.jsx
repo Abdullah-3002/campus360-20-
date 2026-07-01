@@ -155,18 +155,15 @@ const EmergencyContactTab = ({ profileData, updateProfile, readOnly = false }) =
 
                 <div className="field-group">
                     <label className="field-label">Phone Number <span className="required">*</span></label>
-                    <div className="input-wrapper">
-                        <div className="phone-prefix">+92</div>
-                        <input 
-                            type="tel" 
-                            name="emergencyPhone"
-                            className={`${getInputClass('phone')} phone-input`}
-                            placeholder="3001234567" 
-                            value={emergencyData.phone || ''} 
-                            onChange={handlePhoneChange}
-                            onBlur={() => handleBlur('phone')}
-                        />
-                    </div>
+                    <input 
+                        type="tel" 
+                        name="emergencyPhone"
+                        className={getInputClass('phone')}
+                        placeholder="03001234567" 
+                        value={emergencyData.phone || ''} 
+                        onChange={handlePhoneChange}
+                        onBlur={() => handleBlur('phone')}
+                    />
                     {touched.phone && errors.phone && (
                         <div className="error-message">{errors.phone}</div>
                     )}

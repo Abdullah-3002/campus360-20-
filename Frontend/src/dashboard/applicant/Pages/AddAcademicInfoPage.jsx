@@ -1,21 +1,27 @@
-// src/dashboard/Pages/AddAcademicInfoPage.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { addAcademicRecord, uploadDocument, deleteDocument, getMyDocuments } from '../../../services/admissionService';
+import { getAcademicRecordError } from '../../../utils/validation';
+import { saveFormDraft, loadFormDraft, clearFormDraft } from '../../../utils/formDraft';
 import { FileIcon, UploadIcon, XIcon, TrashIcon, PlusIcon, InfoIcon } from '../../Icons';
 
+const INITIAL_FIELDS = {
+    authority: '',
+    qualification_level: '',
+    qualification: '',
+    institute: '',
+    roll_number: '',
+    start_year: '',
+    end_year: '',
+    obtained: '',
+    total: '',
+};
+
 const AddAcademicInfoPage = ({ onCancel }) => {
-    const { token } = useAuth();
-    const [formFields, setFormFields] = useState({
-        authority: '',
-        qualification_level: '',
-        qualification: '',
-        institute: '',
-        roll_number: '',
-        start_year: '',
-        end_year: '',
-        obtained: '',
-        total: '',
+    const { token, user } = useAuth();
+    const [formFields, setFormFields] = useState(() => {
+        const draft = loadFormDraft(user?.user_id, 'academic');
+        return draft || INITIAL_FIELDS;
     });
     const [uploadedDocs, setUploadedDocs] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null);
@@ -25,30 +31,19 @@ const AddAcademicInfoPage = ({ onCancel }) => {
     const [loadingDocs, setLoadingDocs] = useState(true);
     const fileRef = useRef(null);
 
-    // Authority options
-    const authorityOptions = {
-        boards: [
-            { value: 'BISE Lahore', label: 'BISE Lahore' },
-            { value: 'BISE Gujranwala', label: 'BISE Gujranwala' },
-            { value: 'BISE Faisalabad', label: 'BISE Faisalabad' },
-            { value: 'BISE Multan', label: 'BISE Multan' },
-            { value: 'BISE Rawalpindi', label: 'BISE Rawalpindi' },
-            { value: 'BISE Sargodha', label: 'BISE Sargodha' },
-            { value: 'BISE Bahawalpur', label: 'BISE Bahawalpur' },
-            { value: 'BISE Dera Ghazi Khan', label: 'BISE Dera Ghazi Khan' },
-            { value: 'BISE Sahiwal', label: 'BISE Sahiwal' },
-            { value: 'BISE AJK', label: 'BISE AJK' },
-        ],
-        international: [
-            { value: 'Cambridge O-Level', label: 'Cambridge O-Level' },
-            { value: 'Cambridge A-Level', label: 'Cambridge A-Level' },
-            { value: 'Edexcel O-Level', label: 'Edexcel O-Level' },
-            { value: 'Edexcel A-Level', label: 'Edexcel A-Level' },
-            { value: 'Other International Board', label: 'Other International Board' },
-        ]
-    };
+    const authorityOptions = [
+        { value: 'BISE Lahore', label: 'BISE Lahore' },
+        { value: 'BISE Gujranwala', label: 'BISE Gujranwala' },
+        { value: 'BISE Faisalabad', label: 'BISE Faisalabad' },
+        { value: 'BISE Multan', label: 'BISE Multan' },
+        { value: 'BISE Rawalpindi', label: 'BISE Rawalpindi' },
+        { value: 'BISE Sargodha', label: 'BISE Sargodha' },
+        { value: 'BISE Bahawalpur', label: 'BISE Bahawalpur' },
+        { value: 'BISE Dera Ghazi Khan', label: 'BISE Dera Ghazi Khan' },
+        { value: 'BISE Sahiwal', label: 'BISE Sahiwal' },
+        { value: 'BISE AJK', label: 'BISE AJK' },
+    ];
 
-    // Qualification options based on level
     const qualificationOptions = {
         matric: [
             'Matric Science',
@@ -58,14 +53,13 @@ const AddAcademicInfoPage = ({ onCancel }) => {
             'Matric General Science'
         ],
         inter: [
-            'FSc Pre-Medical',
-            'FSc Pre-Engineering',
-            'ICS (Physics)',
-            'ICS (Statistics)',
-            'ICS (Economics)',
-            'FA',
-            'I.Com',
-            'A-Levels'
+            'Fsc Pre Medical',
+            'Fsc Pre Engineering',
+            'ICS Physics',
+            'ICS Statistics',
+            'ICS Economics',
+            'ICOM',
+            'FA Arts / Humanities'
         ]
     };
 
@@ -84,6 +78,12 @@ const AddAcademicInfoPage = ({ onCancel }) => {
         }
         return [];
     };
+
+    useEffect(() => {
+        if (user?.user_id) {
+            saveFormDraft(user.user_id, 'academic', formFields);
+        }
+    }, [formFields, user?.user_id]);
 
     // Load existing academic documents when component mounts
     useEffect(() => {
@@ -179,7 +179,7 @@ const AddAcademicInfoPage = ({ onCancel }) => {
             if (fileRef.current) {
                 fileRef.current.value = '';
             }
-            alert('Document uploaded successfully!');
+            alert(result?.message || 'Document uploaded successfully!');
         } catch (error) {
             console.error('Upload failed:', error);
             alert('Failed to upload document: ' + (error.response?.data?.error || error.message));
@@ -207,37 +207,10 @@ const AddAcademicInfoPage = ({ onCancel }) => {
     const years = Array.from({ length: 30 }, (_, i) => currentYear - i);
 
     const handleSubmit = async () => {
-        // Validation
-        if (!formFields.authority) {
-            alert('Please select Issuing Authority');
-            return;
-        }
-        if (!formFields.qualification_level) {
-            alert('Please select Qualification Level');
-            return;
-        }
-        if (!formFields.qualification) {
-            alert('Please enter Qualification');
-            return;
-        }
-        if (!formFields.institute) {
-            alert('Please enter Institute name');
-            return;
-        }
-        if (!formFields.start_year) {
-            alert('Please select Start Year');
-            return;
-        }
-        if (!formFields.end_year) {
-            alert('Please select End Year');
-            return;
-        }
-        if (!formFields.obtained) {
-            alert('Please enter obtained marks');
-            return;
-        }
-        if (!formFields.total) {
-            alert('Please enter total marks');
+        const errors = getAcademicRecordError(formFields);
+        const errorMessages = Object.values(errors).filter(Boolean);
+        if (errorMessages.length > 0) {
+            alert(errorMessages[0]);
             return;
         }
 
@@ -249,7 +222,7 @@ const AddAcademicInfoPage = ({ onCancel }) => {
                 qualification_level: formFields.qualification_level,
                 qualification: formFields.qualification,
                 institute: formFields.institute,
-                roll_number: formFields.roll_number || '',
+                roll_number: formFields.roll_number.trim(),
                 start_year: parseInt(formFields.start_year),
                 end_year: parseInt(formFields.end_year),
                 grading_system: 'marks',
@@ -257,9 +230,8 @@ const AddAcademicInfoPage = ({ onCancel }) => {
                 total: parseFloat(formFields.total),
             };
             
-            console.log('Sending academic record:', recordData);
-            
             await addAcademicRecord(recordData, token);
+            if (user?.user_id) clearFormDraft(user.user_id, 'academic');
             alert('Academic record saved successfully!');
             onCancel();
         } catch (error) {
@@ -314,16 +286,9 @@ const AddAcademicInfoPage = ({ onCancel }) => {
                             onChange={(e) => setFormFields({...formFields, authority: e.target.value})}
                         >
                             <option value="">Select Authority</option>
-                            <optgroup label="Punjab Boards">
-                                {authorityOptions.boards.map(board => (
-                                    <option key={board.value} value={board.value}>{board.label}</option>
-                                ))}
-                            </optgroup>
-                            <optgroup label="International / O-A Levels">
-                                {authorityOptions.international.map(board => (
-                                    <option key={board.value} value={board.value}>{board.label}</option>
-                                ))}
-                            </optgroup>
+                            {authorityOptions.map(board => (
+                                <option key={board.value} value={board.value}>{board.label}</option>
+                            ))}
                         </select>
                     </div>
                     <div className="field-group">
@@ -336,8 +301,8 @@ const AddAcademicInfoPage = ({ onCancel }) => {
                             }}
                         >
                             <option value="">Select Level</option>
-                            <option value="matric">Matric / O-Level</option>
-                            <option value="inter">Intermediate / A-Level</option>
+                            <option value="matric">Matric</option>
+                            <option value="inter">Intermediate</option>
                         </select>
                     </div>
                 </div>
@@ -380,7 +345,7 @@ const AddAcademicInfoPage = ({ onCancel }) => {
 
                 <div className="two-column-grid">
                     <div className="field-group">
-                        <label className="field-label">Roll No.</label>
+                        <label className="field-label">Roll No. <span className="required">*</span></label>
                         <input 
                             type="text" 
                             className="field-input" 

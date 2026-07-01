@@ -26,4 +26,5 @@ urlpatterns = [
 
     # Program Course mapping
     path('program-courses/add/', views.add_program_course, name='add-program-course'),
+    path('program-courses/<int:program_course_id>/', views.remove_program_course, name='remove-program-course'),
 ]

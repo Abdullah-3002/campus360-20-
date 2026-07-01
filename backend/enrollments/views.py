@@ -33,7 +33,7 @@ def register_courses(request):
     try:
         student = Student.objects.get(user=request.user)
     except Student.DoesNotExist:
-        return Response({'error': 'No student record found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': 'No student record found.'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         current_semester = Semester.objects.get(is_current=True)
@@ -118,8 +118,42 @@ def drop_course(request, registration_id):
 @api_view(['GET'])
 @permission_classes([IsAdmin])
 def list_enrollments(request):
-    enrollments = Enrollment.objects.select_related('student', 'semester').all()
-    semester = request.query_params.get('semester')
-    if semester:
-        enrollments = enrollments.filter(semester__semester_id=semester)
-    return Response(EnrollmentSerializer(enrollments, many=True).data)
+    regs = CourseRegistration.objects.select_related(
+        'student', 'student__user', 'student__program', 'student__program__department',
+        'course', 'section', 'enrollment__semester',
+    ).filter(status='registered')
+
+    dept = request.query_params.get('department')
+    if dept:
+        regs = regs.filter(student__program__department__department_id=dept)
+    program = request.query_params.get('program')
+    if program:
+        regs = regs.filter(student__program__program_id=program)
+    course = request.query_params.get('course')
+    if course:
+        regs = regs.filter(course__course_id=course)
+
+    student_ids = regs.values_list('student_id', flat=True).distinct()
+    items = []
+    for reg in regs.order_by('student__registration_number', 'course__course_code'):
+        items.append({
+            'registration_id': reg.registration_id,
+            'registration_number': reg.student.registration_number,
+            'student_name': reg.student.user.username,
+            'program_name': reg.student.program.program_name,
+            'course_code': reg.course.course_code,
+            'course_name': reg.course.course_name,
+            'section_name': reg.section.section_name if reg.section else '',
+            'semester_name': reg.enrollment.semester.semester_name,
+            'status': reg.status,
+            'credit_hours': reg.course.credit_hours,
+        })
+
+    return Response({
+        'stats': {
+            'total_registrations': len(items),
+            'unique_students': len(set(student_ids)),
+            'courses_count': regs.values('course_id').distinct().count(),
+        },
+        'enrollments': items,
+    })

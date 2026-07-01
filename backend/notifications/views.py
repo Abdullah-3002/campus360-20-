@@ -98,6 +98,16 @@ def create_announcement(request):
         return Response({'error': 'Permission denied. Only Admins and Teachers can create announcements.'}, status=status.HTTP_403_FORBIDDEN)
 
     data = request.data.copy()
+
+    if request.user.user_type == 'teacher':
+        allowed_types = {'academic', 'general'}
+        ann_type = data.get('announcement_type', 'general')
+        if ann_type not in allowed_types:
+            return Response(
+                {'error': 'Teachers can only create academic or general announcements.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        data['target_audience'] = data.get('target_audience') or 'students'
     
     # Map context to content if sent
     if 'context' in data and 'content' not in data:

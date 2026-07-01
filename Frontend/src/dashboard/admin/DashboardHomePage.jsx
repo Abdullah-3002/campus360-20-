@@ -17,7 +17,7 @@ const AdminDashboardHomePage = ({ onNavigate }) => {
         { label: 'Students', value: '0', icon: <UserIcon size={20} />, color: '#3b82f6', bg: '#eff6ff' },
         { label: 'Faculty', value: '0', icon: <BookIcon size={20} />, color: '#10b981', bg: '#f0fdf4' },
         { label: 'Sections', value: '0', icon: <ClipboardIcon />, color: '#f59e0b', bg: '#fffbeb' },
-        { label: 'Enrollments', value: '0', icon: <FileIcon />, color: '#8b5cf6', bg: '#f5f3ff' },
+        { label: 'Enrollments', value: '0', icon: <FileIcon />, color: '#4169E1', bg: '#eef2ff' },
     ]);
 
     useEffect(() => {
@@ -35,7 +35,7 @@ const AdminDashboardHomePage = ({ onNavigate }) => {
                     { label: 'Students', value: count(students).toLocaleString(), icon: <UserIcon size={20} />, color: '#3b82f6', bg: '#eff6ff' },
                     { label: 'Faculty', value: count(faculty).toLocaleString(), icon: <BookIcon size={20} />, color: '#10b981', bg: '#f0fdf4' },
                     { label: 'Sections', value: count(sections).toLocaleString(), icon: <ClipboardIcon />, color: '#f59e0b', bg: '#fffbeb' },
-                    { label: 'Enrollments', value: count(enrollments).toLocaleString(), icon: <FileIcon />, color: '#8b5cf6', bg: '#f5f3ff' },
+                    { label: 'Enrollments', value: count(enrollments).toLocaleString(), icon: <FileIcon />, color: '#4169E1', bg: '#eef2ff' },
                     { label: 'Examinations', value: count(exams).toLocaleString(), icon: <CheckIcon />, color: '#06b6d4', bg: '#ecfeff' },
                     { label: 'Complaints', value: count(complaints).toLocaleString(), icon: <BellIcon size={20} />, color: '#ef4444', bg: '#fef2f2' },
                     { label: 'Challans', value: count(challans).toLocaleString(), icon: <FileIcon />, color: '#fbbf24', bg: '#fffbeb' },

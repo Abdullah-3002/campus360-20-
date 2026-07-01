@@ -25,7 +25,7 @@ const TeacherDashboardHomePage = ({ onNavigate }) => {
                     { label: 'My Sections', value: count(sections).toString(), icon: <BookIcon size={20} />, color: '#3b82f6', bg: '#eff6ff' },
                     { label: 'Examinations', value: count(exams).toString(), icon: <FileIcon />, color: '#10b981', bg: '#f0fdf4' },
                     { label: 'Attendance Records', value: count(att).toString(), icon: <ClipboardIcon size={20} />, color: '#f59e0b', bg: '#fffbeb' },
-                    { label: 'Notifications', value: count(notifs).toString(), icon: <BellIcon size={20} />, color: '#8b5cf6', bg: '#f5f3ff' },
+                    { label: 'Notifications', value: count(notifs).toString(), icon: <BellIcon size={20} />, color: '#4169E1', bg: '#eef2ff' },
                 ]);
             } catch (e) { console.error(e); }
             finally { setLoading(false); }

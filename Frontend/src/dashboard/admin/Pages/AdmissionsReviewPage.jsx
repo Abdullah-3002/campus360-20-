@@ -5,28 +5,25 @@ import {
     adminListApplications,
     adminGetApplicationDetail,
     adminMakeDecision,
-    adminConfirmRegistration,
     adminDownloadDocument,
     adminVerifyDocument,
+    adminReviewChallan,
+    adminDeleteApplication,
 } from '../../../services/admissionService';
-import { changeUserType } from '../../../services/authService';
+import { listDepartments, listPrograms } from '../../../services/academicsService';
+import { normalizeList } from '../../../services/api';
 import {
     PageHeader, useTableFilter, TablePagination, LoadingSpinner,
     EmptyRow, useToast, getStatusBadgeClass, formatDate,
 } from '../../shared/helpers';
 import { FileTextIcon, EyeIcon, XIcon, CheckCircleIcon } from '../../Icons';
 
-const STATUS_FILTERS = [
-    { value: '', label: 'All' },
+const TAB_FILTERS = [
+    { value: '', label: 'All (with challan)' },
     { value: 'pending', label: 'Pending' },
-    { value: 'under_review', label: 'Under Review' },
-    { value: 'approved', label: 'Approved' },
+    { value: 'accepted', label: 'Accepted' },
     { value: 'rejected', label: 'Rejected' },
-    { value: 'waitlist', label: 'Waitlist' },
-    { value: 'registered', label: 'Registered' },
 ];
-
-const USER_TYPES = ['applicant', 'student'];
 
 const DECIDED_STATUSES = new Set(['approved', 'rejected', 'waitlist', 'registered']);
 
@@ -42,7 +39,11 @@ const AdmissionsReviewPage = () => {
     const { showToast, Toast } = useToast();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState('');
+    const [tabFilter, setTabFilter] = useState('');
+    const [selectedDept, setSelectedDept] = useState('');
+    const [selectedProgram, setSelectedProgram] = useState('');
+    const [departments, setDepartments] = useState([]);
+    const [programs, setPrograms] = useState([]);
     const [selectedApp, setSelectedApp] = useState(null);
     const [detail, setDetail] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
@@ -52,12 +53,15 @@ const AdmissionsReviewPage = () => {
     const [offeredSection, setOfferedSection] = useState('');
     const [batchSections, setBatchSections] = useState([]);
     const [submitting, setSubmitting] = useState(false);
-    const [newUserType, setNewUserType] = useState('student');
 
     const load = async () => {
         setLoading(true);
         try {
-            const data = await adminListApplications(token, statusFilter);
+            const filters = {};
+            if (tabFilter) filters.tab = tabFilter;
+            if (selectedDept) filters.department = selectedDept;
+            if (selectedProgram) filters.program = selectedProgram;
+            const data = await adminListApplications(token, filters);
             setItems(Array.isArray(data) ? data : []);
         } catch (e) {
             console.error(e);
@@ -82,8 +86,14 @@ const AdmissionsReviewPage = () => {
         if (token) {
             load();
             fetchBatchSections();
+            listDepartments(token).then(d => setDepartments(normalizeList(d))).catch(console.error);
         }
-    }, [token, statusFilter]);
+    }, [token, tabFilter, selectedDept, selectedProgram]);
+
+    useEffect(() => {
+        if (!token || !selectedDept) { setPrograms([]); return; }
+        listPrograms(token, selectedDept).then(d => setPrograms(normalizeList(d))).catch(console.error);
+    }, [token, selectedDept]);
 
     const { search, setSearch, page, setPage, paginated, filtered, totalPages, pageSize } = useTableFilter(
         items,
@@ -110,7 +120,6 @@ const AdmissionsReviewPage = () => {
         setRejectionReason('');
         setRemarks('');
         setOfferedSection('');
-        setNewUserType(app.user_type === 'applicant' ? 'student' : (app.user_type || 'student'));
         try {
             await refreshDetail(app.id);
         } catch (e) {
@@ -128,6 +137,21 @@ const AdmissionsReviewPage = () => {
 
     const hasDecision = detail && DECIDED_STATUSES.has(detail.status);
     const isRegistered = detail?.status === 'registered';
+
+    const [challanRemarks, setChallanRemarks] = useState('');
+
+    const handleChallanReview = async (action) => {
+        if (!selectedApp) return;
+        try {
+            await adminReviewChallan(selectedApp.id, action, challanRemarks, token);
+            showToast(action === 'accept' ? 'Challan accepted' : 'Challan rejected');
+            setChallanRemarks('');
+            await refreshDetail(selectedApp.id);
+            load();
+        } catch (e) {
+            alert(e.response?.data?.error || 'Failed to review challan');
+        }
+    };
 
     const handleVerifyDoc = async (docId) => {
         try {
@@ -157,7 +181,7 @@ const AdmissionsReviewPage = () => {
                 remarks,
                 offered_section: offeredSection,
             }, token);
-            showToast(`Application ${decision}.`);
+            showToast(decision === 'approved' ? 'Approved — student registered automatically.' : `Application ${decision}.`);
             await refreshDetail(selectedApp.id);
             load();
         } catch (e) {
@@ -167,42 +191,16 @@ const AdmissionsReviewPage = () => {
         }
     };
 
-    const handleConfirmRegistration = async () => {
-        if (!selectedApp) return;
-        if (!confirm('Confirm student registration? This will create a student record, enroll in semester courses, and set role to student.')) return;
-        setSubmitting(true);
+    const handleDeleteRejected = async () => {
+        if (!selectedApp || detail?.status !== 'rejected') return;
+        if (!confirm('Permanently delete this rejected application?')) return;
         try {
-            const result = await adminConfirmRegistration(selectedApp.id, token);
-            showToast(`Registration confirmed: ${result.registration_number}`);
-            await refreshDetail(selectedApp.id);
+            await adminDeleteApplication(selectedApp.id, token);
+            showToast('Rejected application deleted');
+            closeDetail();
             load();
         } catch (e) {
-            alert(e.response?.data?.error || 'Failed to confirm registration');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const handleChangeRole = async () => {
-        if (!detail?.applicant?.user_id) return;
-        if (!hasDecision) {
-            alert('Please submit an accept/reject decision before changing the user role.');
-            return;
-        }
-        if (newUserType === 'student' && detail.status === 'approved' && !isRegistered) {
-            return handleConfirmRegistration();
-        }
-        if (!confirm(`Change user role to "${newUserType}"? The user will see the ${newUserType} dashboard on next login.`)) return;
-        setSubmitting(true);
-        try {
-            await changeUserType(detail.applicant.user_id, newUserType, token);
-            showToast(`Role changed to ${newUserType}.`);
-            await refreshDetail(selectedApp.id);
-            load();
-        } catch (e) {
-            alert(e.response?.data?.error || 'Failed to change role');
-        } finally {
-            setSubmitting(false);
+            alert(e.response?.data?.error || 'Delete failed');
         }
     };
 
@@ -228,6 +226,26 @@ const AdmissionsReviewPage = () => {
             {Toast}
             <PageHeader breadcrumb="DASHBOARD > ADMISSIONS" title="Admission Applications Review" />
 
+            <div className="application-tabs" style={{ marginBottom: '12px' }}>
+                {TAB_FILTERS.map(f => (
+                    <button key={f.value} className={`app-tab ${tabFilter === f.value ? 'active' : ''}`}
+                        onClick={() => setTabFilter(f.value)}>
+                        {f.label}
+                    </button>
+                ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <select className="field-input field-select" value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setSelectedProgram(''); }}>
+                    <option value="">All Departments</option>
+                    {departments.map(d => <option key={d.department_id} value={d.department_id}>{d.department_name}</option>)}
+                </select>
+                <select className="field-input field-select" value={selectedProgram} onChange={e => setSelectedProgram(e.target.value)} disabled={!selectedDept}>
+                    <option value="">All Programs</option>
+                    {programs.map(p => <option key={p.program_id} value={p.program_id}>{p.program_name}</option>)}
+                </select>
+            </div>
+
             <div className="form-card">
                 <div className="table-toolbar">
                     <div className="table-search search-bar" style={{ maxWidth: 360 }}>
@@ -239,16 +257,6 @@ const AdmissionsReviewPage = () => {
                             onChange={e => { setSearch(e.target.value); setPage(1); }}
                         />
                     </div>
-                    <select
-                        className="field-input field-select"
-                        value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value)}
-                        style={{ maxWidth: '180px' }}
-                    >
-                        {STATUS_FILTERS.map(f => (
-                            <option key={f.value} value={f.value}>{f.label}</option>
-                        ))}
-                    </select>
                 </div>
 
                 <div className="data-table-wrapper">
@@ -261,13 +269,12 @@ const AdmissionsReviewPage = () => {
                                 <th>Program</th>
                                 <th>Submitted</th>
                                 <th>Status</th>
-                                <th>Role</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {paginated.length === 0 ? (
-                                <EmptyRow colSpan={8} icon={<FileTextIcon size={20} />} title="No applications found" />
+                                <EmptyRow colSpan={7} icon={<FileTextIcon size={20} />} title="No applications found" subtitle="Only applications with uploaded paid challan are shown." />
                             ) : paginated.map((item, i) => (
                                 <tr key={item.id}>
                                     <td>{(page - 1) * pageSize + i + 1}</td>
@@ -279,7 +286,6 @@ const AdmissionsReviewPage = () => {
                                     <td>{item.program_name || '—'}</td>
                                     <td>{formatDate(item.submitted_at)}</td>
                                     <td><span className={getStatusBadgeClass(item.status)}>{item.status?.toUpperCase()}</span></td>
-                                    <td>{item.user_type || '—'}</td>
                                     <td>
                                         <button className="action-btn view-btn" onClick={() => openDetail(item)} title="Review">
                                             <EyeIcon size={16} />
@@ -313,6 +319,9 @@ const AdmissionsReviewPage = () => {
                                         <DetailRow label="Status" value={detail.status} />
                                         <DetailRow label="Program" value={detail.program_name} />
                                         <DetailRow label="Admission Type" value={detail.admission_type} />
+                                        <DetailRow label="Challan No" value={detail.admission_challan_number} />
+                                        <DetailRow label="Challan Amount" value={detail.admission_challan_amount ? `Rs. ${detail.admission_challan_amount}` : '—'} />
+                                        <DetailRow label="Challan Paid" value={detail.challan_paid ? 'Yes' : 'No'} />
                                         <DetailRow label="Submitted" value={formatDate(detail.submitted_at)} />
                                         <DetailRow label="Preferences" value={
                                             detail.preferences?.map(p => `${p.preference_order}. ${p.program_name}`).join(', ')
@@ -368,10 +377,17 @@ const AdmissionsReviewPage = () => {
                                             ) : detail.applicant.documents.map(doc => (
                                                 <tr key={doc.document_id}>
                                                     <td>{doc.document_type_display || doc.document_type}</td>
-                                                    <td>{doc.file_name}</td>
+                                                    <td>
+                                                        <div>{doc.file_name}</div>
+                                                        {doc.verification_remarks && (
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                                                                {doc.verification_remarks.slice(0, 120)}{doc.verification_remarks.length > 120 ? '…' : ''}
+                                                            </div>
+                                                        )}
+                                                    </td>
                                                     <td>
                                                         <span className={doc.is_verified ? 'status-badge status-approved' : 'status-badge status-pending'}>
-                                                            {doc.is_verified ? 'Verified' : 'Unverified'}
+                                                            {doc.is_verified ? 'VERIFIED' : 'PENDING'}
                                                         </span>
                                                     </td>
                                                     <td>
@@ -401,6 +417,20 @@ const AdmissionsReviewPage = () => {
 
                                 <div className="admin-actions-panel">
                                     <h3 className="review-section-title">Admin Actions</h3>
+
+                                    {(detail.status === 'under_review' || detail.status === 'challan_pending') && (
+                                        <div style={{ marginBottom: '20px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                                            <div className="workflow-step-label">Challan Review</div>
+                                            <div className="field-group" style={{ marginBottom: '12px' }}>
+                                                <label className="field-label">Challan Review Remarks</label>
+                                                <textarea className="field-input" rows={2} value={challanRemarks} onChange={e => setChallanRemarks(e.target.value)} placeholder="Optional remarks for challan review" />
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button className="btn-verify" onClick={() => handleChallanReview('accept')}>Accept Paid Challan</button>
+                                                <button className="action-btn danger" onClick={() => handleChallanReview('reject')}>Reject Challan</button>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {hasDecision && (
                                         <div className={`decision-banner ${detail.status === 'registered' ? 'approved' : detail.status}`}>
@@ -476,51 +506,22 @@ const AdmissionsReviewPage = () => {
                                     </div>
 
                                     {!isRegistered && (
-                                        <button className="btn-save" onClick={handleDecision} disabled={submitting} style={{ marginBottom: '20px' }}>
+                                        <button className="btn-save" onClick={handleDecision} disabled={submitting} style={{ marginBottom: '12px' }}>
                                             {submitting ? 'Saving...' : hasDecision ? 'Update Decision' : 'Submit Decision'}
                                         </button>
                                     )}
 
-                                    <div className={`${!hasDecision ? 'workflow-step-disabled' : ''}`}>
-                                        <div className="workflow-step-label">
-                                            Step 2 — Change Role {(!hasDecision && '(submit decision first)')}
-                                        </div>
+                                    {detail.status === 'rejected' && (
+                                        <button className="action-btn danger" onClick={handleDeleteRejected}>
+                                            Delete Rejected Application
+                                        </button>
+                                    )}
 
-                                        {detail.status === 'approved' && !isRegistered && (
-                                            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                                                To make this applicant a student, use Confirm Student Registration below. This creates their student record and enrolls them in semester courses.
-                                            </p>
-                                        )}
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                                            <div className="field-group">
-                                                <label className="field-label">Change User Role</label>
-                                                <div style={{ display: 'flex', gap: '8px' }}>
-                                                    <select
-                                                        className="field-input field-select"
-                                                        value={newUserType}
-                                                        onChange={e => setNewUserType(e.target.value)}
-                                                        disabled={!hasDecision || isRegistered}
-                                                    >
-                                                        {USER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                                                    </select>
-                                                    <button
-                                                        className="btn-verify"
-                                                        onClick={handleChangeRole}
-                                                        disabled={submitting || !hasDecision || isRegistered}
-                                                    >
-                                                        Apply
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {detail.status === 'approved' && !isRegistered && (
-                                            <button className="btn-verify" onClick={handleConfirmRegistration} disabled={submitting || !hasDecision}>
-                                                Confirm Student Registration
-                                            </button>
-                                        )}
-                                    </div>
+                                    {decision === 'approved' && (
+                                        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                                            Approving automatically creates the student record and enrolls them in semester 1 courses.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         ) : null}

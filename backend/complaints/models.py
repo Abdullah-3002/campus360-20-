@@ -34,6 +34,7 @@ class Complaint(models.Model):
     description  = models.TextField()
     priority     = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
     status       = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending')
+    admin_response = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     resolved_at  = models.DateTimeField(null=True, blank=True)
     attachments  = models.CharField(max_length=500, blank=True)

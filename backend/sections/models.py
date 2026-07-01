@@ -17,6 +17,8 @@ class Section(models.Model):
     max_capacity  = models.IntegerField()
     enrolled_count = models.IntegerField(default=0)
     is_active     = models.BooleanField(default=True)
+    marks_locked  = models.BooleanField(default=False)
+    marks_unlock_until = models.DateTimeField(null=True, blank=True)
     created_at    = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -65,4 +67,4 @@ class BatchSection(models.Model):
         unique_together = ['section_name', 'batch_year', 'program']
 
     def __str__(self):
-        return f"{self.program.program_code} — {self.batch_year} — Section {self.section_name}"
+        return f"{self.program.program_code} — {self.batch_year} — Section {self.section_name}"

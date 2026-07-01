@@ -1,5 +1,6 @@
 // src/components/Navbar.jsx
 import React, { useState, useEffect } from 'react';
+import ThemeToggle from './ThemeToggle';
 
 const Navbar = ({ setView, currentView }) => {
     const [isScrolled, setIsScrolled] = useState(false);
@@ -37,6 +38,7 @@ const Navbar = ({ setView, currentView }) => {
                     <li><a href="#contact" onClick={(e) => { e.preventDefault(); document.getElementById('footer').scrollIntoView(); }}>Contact</a></li>
                 </ul>
                 <div className="auth-buttons">
+                    <ThemeToggle showLabel />
                     <button className="btn btn-apply" onClick={() => setView('login')}>Apply Now</button>
                 </div>
             </div>

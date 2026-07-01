@@ -25,4 +25,6 @@ urlpatterns = [
     path('results/create/', views.create_result, name='create-result'),
     path('results/<int:result_id>/publish/', views.publish_result, name='publish-result'),
     path('results/<int:result_id>/approve/', views.approve_result, name='approve-result'),
+    path('sections/<int:section_id>/compute-grades/', views.compute_section_grades, name='compute-section-grades'),
+    path('sections/<int:section_id>/unlock-marks/', views.unlock_section_marks, name='unlock-section-marks'),
 ]

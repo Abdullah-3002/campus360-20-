@@ -67,7 +67,7 @@ export const getEmailError = (value) => {
 };
 
 // ============================================
-// DATE OF BIRTH VALIDATION (Minimum 16 years)
+// DATE OF BIRTH VALIDATION (Minimum 18 years)
 // ============================================
 export const isValidDOB = (value) => {
     if (!value) return false;
@@ -78,12 +78,12 @@ export const isValidDOB = (value) => {
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
         age--;
     }
-    return age >= 16;
+    return age >= 18;
 };
 
 export const getDOBError = (value) => {
     if (!value) return 'Date of birth is required';
-    if (!isValidDOB(value)) return 'You must be at least 16 years old';
+    if (!isValidDOB(value)) return 'You must be at least 18 years old';
     return '';
 };
 
@@ -188,17 +188,42 @@ export const getAcademicRecordError = (record) => {
     if (!record.qualification_level) errors.qualification_level = 'Qualification level is required';
     if (!record.qualification) errors.qualification = 'Qualification is required';
     if (!record.institute) errors.institute = 'Institute name is required';
+    if (!record.roll_number || !record.roll_number.trim()) errors.roll_number = 'Roll number is required';
+    else if (!/^[A-Za-z0-9-]{3,20}$/.test(record.roll_number.trim())) {
+        errors.roll_number = 'Roll number must be 3-20 alphanumeric characters';
+    }
     if (!record.start_year) errors.start_year = 'Start year is required';
     if (!record.end_year) errors.end_year = 'End year is required';
     if (record.start_year && record.end_year && parseInt(record.end_year) <= parseInt(record.start_year)) {
         errors.end_year = 'End year must be after start year';
+    }
+    const currentYear = new Date().getFullYear();
+    if (record.start_year && (parseInt(record.start_year) < 1980 || parseInt(record.start_year) > currentYear)) {
+        errors.start_year = `Start year must be between 1980 and ${currentYear}`;
+    }
+    if (record.end_year && (parseInt(record.end_year) < 1980 || parseInt(record.end_year) > currentYear)) {
+        errors.end_year = `End year must be between 1980 and ${currentYear}`;
     }
     if (!record.obtained) errors.obtained = 'Obtained marks are required';
     if (!record.total) errors.total = 'Total marks are required';
     if (record.obtained && record.total && parseFloat(record.obtained) > parseFloat(record.total)) {
         errors.obtained = 'Obtained marks cannot exceed total marks';
     }
+    if (record.obtained && parseFloat(record.obtained) <= 0) {
+        errors.obtained = 'Obtained marks must be greater than zero';
+    }
+    if (record.total && parseFloat(record.total) <= 0) {
+        errors.total = 'Total marks must be greater than zero';
+    }
     return errors;
+};
+
+export const hasMatricAndInter = (records) => {
+    if (!records || !records.length) return false;
+    const levels = records.map(r => r.qualification_level);
+    const hasMatric = levels.includes('matric');
+    const hasInter = levels.includes('inter') || levels.includes('intermediate');
+    return hasMatric && hasInter;
 };
 
 // ============================================

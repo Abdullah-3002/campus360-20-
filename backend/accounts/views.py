@@ -14,7 +14,7 @@ from .serializers import (
 from .utils import generate_jwt_token, create_login_session, generate_password_reset_token
 from .permissions import IsAdmin
 from faculty.models import Faculty, Staff, EmployeeProfile, Designation
-from academics.models import Department
+from academics.models import Department, DegreeProgram
 import jwt
 from django.conf import settings
 
@@ -429,6 +429,20 @@ def create_user_credentials(request):
     if User.objects.filter(email=email).exists():
         return Response({'error': 'Email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    if user_type == 'teacher':
+        dept_id = request.data.get('department_id')
+        prog_id = request.data.get('program_id')
+        if not dept_id:
+            return Response({'error': 'department_id is required for teachers.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not prog_id:
+            return Response({'error': 'program_id is required for teachers.'}, status=status.HTTP_400_BAD_REQUEST)
+        department = Department.objects.filter(department_id=dept_id).first()
+        if not department:
+            return Response({'error': 'Invalid department_id.'}, status=status.HTTP_400_BAD_REQUEST)
+        program = DegreeProgram.objects.filter(program_id=prog_id, department=department).first()
+        if not program:
+            return Response({'error': 'Invalid program_id for selected department.'}, status=status.HTTP_400_BAD_REQUEST)
+
     with transaction.atomic():
         user = User.objects.create_user(
             username=username,
@@ -443,18 +457,22 @@ def create_user_credentials(request):
 
         if user_type in ['teacher', 'staff']:
             dept_id = request.data.get('department_id')
+            prog_id = request.data.get('program_id')
             desig_id = request.data.get('designation_id')
 
-            department = None
-            if dept_id:
-                department = Department.objects.filter(department_id=dept_id).first()
-            if not department:
-                department = Department.objects.first()
+            if user_type == 'teacher':
+                department = Department.objects.get(department_id=dept_id)
+                program = DegreeProgram.objects.get(program_id=prog_id, department=department)
+            else:
+                department = Department.objects.filter(department_id=dept_id).first() if dept_id else None
+                program = None
                 if not department:
-                    department = Department.objects.create(
-                        department_name='General Academic Department',
-                        department_code='GEN'
-                    )
+                    department = Department.objects.first()
+                    if not department:
+                        department = Department.objects.create(
+                            department_name='General Academic Department',
+                            department_code='GEN'
+                        )
 
             designation = None
             if desig_id:
@@ -487,12 +505,14 @@ def create_user_credentials(request):
                 fac_obj = Faculty.objects.create(
                     user=user,
                     department=department,
+                    program=program,
                     designation=designation,
                     employee_code=emp_code,
                     qualification=qual,
                     joining_date=joining_date,
                     employment_type=emp_type,
                     status=emp_status,
+                    profile_completed=False,
                 )
                 EmployeeProfile.objects.create(
                     employee_id=fac_obj.faculty_id,
@@ -539,4 +559,4 @@ def create_user_credentials(request):
         'username': user.username,
         'email': user.email,
         'user_type': user.user_type,
-    }, status=status.HTTP_201_CREATED)
+    }, status=status.HTTP_201_CREATED)

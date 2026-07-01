@@ -175,3 +175,25 @@ class ResultApproval(models.Model):
 
     class Meta:
         db_table = 'result_approval'
+
+
+class MarksEditPermission(models.Model):
+    permission_id = models.AutoField(primary_key=True)
+    section = models.ForeignKey('sections.Section', on_delete=models.CASCADE, related_name='marks_edit_permissions')
+    student = models.ForeignKey(
+        'students.Student', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='marks_edit_permissions',
+    )
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name='granted_marks_permissions'
+    )
+    granted_to = models.ForeignKey(
+        'faculty.Faculty', on_delete=models.CASCADE, related_name='marks_edit_permissions'
+    )
+    expires_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'marks_edit_permission'

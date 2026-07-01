@@ -21,3 +21,5 @@ export const myResults = (token) => apiGet(`${BASE}/results/me/`, token);
 export const listResults = (token) => apiGet(`${BASE}/results/`, token);
 export const publishResult = (id, token) => apiPost(`${BASE}/results/${id}/publish/`, {}, token);
 export const approveResult = (id, token) => apiPost(`${BASE}/results/${id}/approve/`, {}, token);
+export const computeSectionGrades = (sectionId, token) => apiPost(`${BASE}/sections/${sectionId}/compute-grades/`, {}, token);
+export const unlockSectionMarks = (sectionId, data, token) => apiPost(`${BASE}/sections/${sectionId}/unlock-marks/`, data, token);

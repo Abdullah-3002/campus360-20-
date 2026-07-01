@@ -8,6 +8,8 @@ export const getAuthHeader = (token) => ({
 
 export const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
+  if (data?.students) return data.students;
+  if (data?.enrollments) return data.enrollments;
   return data?.results || [];
 };
 

@@ -19,7 +19,7 @@ const DashboardHomePage = ({ onNavigate, studentInfo }) => {
         { label: 'Registration Status', value: 'Not Verified', icon: <CheckIcon />, color: '#10b981', bg: '#f0fdf4' },
         { label: 'Profile Completion', value: '0%', icon: <UserIcon size={20} />, color: '#3b82f6', bg: '#eff6ff', progress: 0 },
         { label: 'Active Applications', value: '0', icon: <ClipboardIcon />, color: '#f59e0b', bg: '#fffbeb' },
-        { label: 'Documents Uploaded', value: `0 / ${MAX_DOCUMENTS}`, icon: <FileIcon />, color: '#8b5cf6', bg: '#f5f3ff', progress: 0 },
+        { label: 'Documents Uploaded', value: `0 / ${MAX_DOCUMENTS}`, icon: <FileIcon />, color: '#4169E1', bg: '#eef2ff', progress: 0 },
     ]);
 
     // Required fields for profile completion calculation
@@ -166,8 +166,8 @@ const DashboardHomePage = ({ onNavigate, studentInfo }) => {
                         label: 'Documents Uploaded', 
                         value: `${documentsCount} / ${MAX_DOCUMENTS}`, 
                         icon: <FileIcon />, 
-                        color: '#8b5cf6', 
-                        bg: '#f5f3ff', 
+                        color: '#4169E1', 
+                        bg: '#eef2ff', 
                         progress: documentsProgress 
                     },
                 ]);

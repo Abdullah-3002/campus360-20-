@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from './api';
+import { apiGet, apiPost, apiPut, apiDelete } from './api';
 
 const BASE = '/complaints';
 
@@ -10,6 +10,9 @@ export const myComplaints = (token) => apiGet(`${BASE}/me/`, token);
 export const listAllComplaints = (token) => apiGet(`${BASE}/`, token);
 export const getComplaint = (id, token) => apiGet(`${BASE}/${id}/`, token);
 export const updateComplaint = (id, data, token) => apiPut(`${BASE}/${id}/`, data, token);
+export const deleteComplaint = (id, token) => apiDelete(`${BASE}/${id}/`, token);
+export const adminUpdateComplaintStatus = (id, data, token) => apiPost(`${BASE}/${id}/admin-status/`, data, token);
+export const listActiveComplaints = (token) => apiGet(`${BASE}/?active=true`, token);
 export const assignComplaint = (id, data, token) => apiPost(`${BASE}/${id}/assign/`, data, token);
 export const getComplaintThread = (id, token) => apiGet(`${BASE}/${id}/thread/`, token);
 export const postComplaintMessage = (id, data, token) => apiPost(`${BASE}/${id}/thread/`, data, token);

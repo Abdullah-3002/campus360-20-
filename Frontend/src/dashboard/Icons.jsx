@@ -43,6 +43,9 @@ export const SparklesIcon = ({ size = 20 }) => <Icon path={<><path d="M12 3l1.91
 export const PlusIcon = () => <Icon path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />;
 export const TrashIcon = ({ size = 16 }) => <Icon path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>} size={size} />;
 export const XIcon = ({ size = 16 }) => <Icon path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={size} />;
+export const CheckCircleIcon = ({ size = 20 }) => (
+    <Icon path={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} size={size} />
+);
 export const CheckIcon = ({ size = 18 }) => <Icon path={<><polyline points="20 6 9 17 4 12"/></>} size={size} />;
 export const AlertCircleIcon = ({ size = 18 }) => <Icon path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} size={size} />;
 export const InfoIcon = ({ size = 16 }) => <Icon path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></>} size={size} />;

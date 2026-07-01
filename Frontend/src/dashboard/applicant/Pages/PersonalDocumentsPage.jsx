@@ -134,8 +134,8 @@ const PersonalDocumentsPage = ({ onDocumentChange, readOnly = false }) => {
         
         setUploading(true);
         try {
-            await uploadDocument({ document_type: selectedDocType, file: selectedFile }, token);
-            alert("Document uploaded successfully!");
+            const res = await uploadDocument({ document_type: selectedDocType, file: selectedFile }, token);
+            alert(res?.message || 'Document uploaded successfully!');
             setSelectedFile(null);
             setSelectedDocType('');
             if (fileInputRef.current) fileInputRef.current.value = '';

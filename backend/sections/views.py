@@ -62,9 +62,28 @@ def section_detail(request, section_id):
 def get_my_sections(request):
     if request.user.user_type != 'teacher':
         return Response({'error': 'Only teachers can access this.'}, status=status.HTTP_403_FORBIDDEN)
-    sections = Section.objects.select_related('course', 'semester').filter(
-        faculty__user=request.user, is_active=True
+    sections = Section.objects.select_related('course', 'semester', 'course__department').filter(
+        faculty__user=request.user
     )
+    active_only = request.query_params.get('active', 'true')
+    if active_only == 'true':
+        sections = sections.filter(is_active=True)
+    elif active_only == 'false':
+        sections = sections.filter(is_active=False)
+    program_id = request.query_params.get('program_id')
+    batch_year = request.query_params.get('batch_year')
+    if program_id:
+        from enrollments.models import CourseRegistration
+        section_ids = CourseRegistration.objects.filter(
+            student__program_id=program_id, status='registered'
+        ).values_list('section_id', flat=True).distinct()
+        sections = sections.filter(section_id__in=section_ids)
+    if batch_year:
+        from enrollments.models import CourseRegistration
+        section_ids = CourseRegistration.objects.filter(
+            student__batch_year=batch_year, status='registered'
+        ).values_list('section_id', flat=True).distinct()
+        sections = sections.filter(section_id__in=section_ids)
     return Response(SectionSerializer(sections, many=True).data)
 
 
@@ -133,4 +152,30 @@ def get_section_students(request, section_id):
             'username': reg.student.user.username,
             'email': reg.student.user.email,
         })
-    return Response(data)
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminOrTeacher])
+def submit_final_marks(request, section_id):
+    """Lock section marks and deactivate section after teacher submits final marks."""
+    try:
+        section = Section.objects.select_related('faculty').get(section_id=section_id)
+    except Section.DoesNotExist:
+        return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.user.user_type == 'teacher':
+        if section.faculty.user_id != request.user.user_id:
+            return Response({'error': 'You can only submit marks for your own sections.'}, status=status.HTTP_403_FORBIDDEN)
+
+    from examinations.views import _compute_section_final_grades
+    grade_stats = _compute_section_final_grades(section)
+
+    section.marks_locked = True
+    section.is_active = False
+    section.save(update_fields=['marks_locked', 'is_active'])
+    return Response({
+        'message': 'Final marks submitted. Section is now locked and inactive.',
+        'section_id': section_id,
+        **grade_stats,
+    })

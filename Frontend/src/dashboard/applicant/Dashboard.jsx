@@ -1,13 +1,15 @@
 // src/dashboard/applicant/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { getApplicantProfile, getMyDocuments, getAcademicRecords, getMyApplications, isApplicationLocked, hasRejectedApplication } from '../../services/admissionService';
+import { getApplicantProfile, getMyDocuments, getAcademicRecords, getMyApplications, isApplicationLocked, hasRejectedApplication, getApplicationChallanPending } from '../../services/admissionService';
+import { mergeProfileDraft, saveFormDraft } from '../../utils/formDraft';
+import { hasMatricAndInter } from '../../utils/validation';
+import ThemeToggle from '../../components/ThemeToggle';
 import '../../Dashboard.css';
 
 
 // Import Icons
 import { 
-    SearchIcon, 
     LayoutDashboardIcon, 
     FileTextIcon, 
     UserIcon, 
@@ -34,6 +36,7 @@ import AdmissionListingPage from './Pages/AdmissionListingPage';
 import AdmissionFormPage from './Pages/AdmissionFormPage';
 import ChangePasswordPage from './Pages/ChangePasswordPage';
 import RejectedApplicationView from './Pages/RejectedApplicationView';
+import ApplicantChallanPanel from './Pages/ApplicantChallanPanel';
 
 // Sequential order of tabs
 const TAB_ORDER = ['personal', 'residence', 'emergency', 'guardian'];
@@ -120,9 +123,9 @@ const hasAllDocuments = (documents) => {
     return result;
 };
 
-// Check if academic records exist
+// Check if academic records exist (both Matric and Inter required)
 const hasAcademicRecords = (records) => {
-    return records && records.length > 0;
+    return hasMatricAndInter(records);
 };
 
 // ========== MAIN DASHBOARD COMPONENT ==========
@@ -231,7 +234,8 @@ const Dashboard = ({ setView, user }) => {
             
             try {
                 const profile = await getApplicantProfile(token, studentInfo.username);
-                if (isMounted.current) setProfileData(prev => ({ ...prev, ...profile }));
+                const mergedProfile = mergeProfileDraft(authUser?.user_id, profile);
+                if (isMounted.current) setProfileData(prev => ({ ...prev, ...mergedProfile }));
                 
                 const docs = await getMyDocuments(token);
                 console.log('Loaded documents from API:', docs);
@@ -267,8 +271,11 @@ const Dashboard = ({ setView, user }) => {
     }, [token, studentInfo.username]);
 
     useEffect(() => {
-        localStorage.setItem('profileData', JSON.stringify(profileData));
-    }, [profileData]);
+        if (authUser?.user_id) {
+            localStorage.setItem('profileData', JSON.stringify(profileData));
+            saveFormDraft(authUser.user_id, 'profile', profileData);
+        }
+    }, [profileData, authUser?.user_id]);
 
     const handleProfileChange = (key, value) => {
         setProfileData(prev => ({ ...prev, [key]: value }));
@@ -359,7 +366,7 @@ const Dashboard = ({ setView, user }) => {
             return;
         }
         if (!hasAcademicRecords(academicRecords)) {
-            alert('Please add your Academic Information (Matric, Intermediate, etc.) first.');
+            alert('Please add both Matric and Intermediate academic records before proceeding.');
             setCurrentPage('academic-info');
             return;
         }
@@ -404,7 +411,7 @@ const Dashboard = ({ setView, user }) => {
             return;
         }
         if (!hasAcademicRecords(academicRecords)) {
-            alert('Please add your Academic Information (Matric, Intermediate, etc.) first.');
+            alert('Please add both Matric and Intermediate academic records before proceeding.');
             setCurrentPage('academic-info');
             return;
         }
@@ -455,10 +462,15 @@ const Dashboard = ({ setView, user }) => {
         );
     }
 
+    const challanApp = getApplicationChallanPending(applications);
+    const rejectedApp = applications.find(app => app.status === 'rejected');
+    const rejectionReason = rejectedApp?.rejection_message || rejectedApp?.decision?.rejection_reason || '';
+
     if (isRejected) {
         return (
             <RejectedApplicationView
                 username={studentInfo.username}
+                rejectionReason={rejectionReason}
                 onLogout={handleLogout}
             />
         );
@@ -569,13 +581,8 @@ const Dashboard = ({ setView, user }) => {
                             Campus 360
                         </div>
                     </div>
-                    <div className="header-center">
-                        <div className="search-bar">
-                            <span style={{ color: '#9ca3af', display: 'flex' }}><SearchIcon /></span>
-                            <input type="text" placeholder="Search..." className="search-input" />
-                        </div>
-                    </div>
-                    <div className="header-right">
+                    <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <ThemeToggle />
                         <div className="header-profile" onClick={() => setProfileOpen(!profileOpen)}>
                             <img 
                                 src={profileData.profileImage || "/student-avatar.jpg"} 
@@ -600,19 +607,17 @@ const Dashboard = ({ setView, user }) => {
                                 </a>
                             </div>
                         </div>
-                        <button className="dropdown-arrow-btn" style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', marginLeft: '8px', display: 'flex', alignItems: 'center' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
                     </div>
                 </header>
 
                 <div className="dashboard-content-wrapper">
-                    {isLocked && (
+                    {challanApp && (
+                        <ApplicantChallanPanel application={challanApp} onChallanUploaded={refreshApplications} />
+                    )}
+                    {isLocked && !challanApp && (
                         <div style={{
-                            background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px',
-                            padding: '14px 18px', marginBottom: '20px', color: '#1e40af',
+                            background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: '8px',
+                            padding: '14px 18px', marginBottom: '20px', color: 'var(--text-primary)',
                         }}>
                             <strong>Application Submitted</strong> — Your application is under review. You cannot make changes to your profile, documents, or academic records.
                         </div>
