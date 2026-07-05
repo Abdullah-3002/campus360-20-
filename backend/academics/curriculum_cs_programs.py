@@ -88,23 +88,23 @@ PROGRAM_CURRICULA = {
         ],
         2: [
             _c('CS102', 'Object Oriented Programming', 'core', 4, 3, 1),
-            _c('SE201', 'Software Requirements Engineering', 'core', 3, 3, 0),
+            _c('SE201', 'Introduction to Software Engineering', 'core', 3, 3, 0),
             _c('MTH102', 'Linear Algebra', 'core', 3, 3, 0),
             _c('ENG102', 'Communication & Presentation Skills', 'core', 3, 3, 0),
             _c('PAK101', 'Pakistan Studies', 'core', 2, 2, 0),
         ],
         3: [
             _c('CS201', 'Data Structures & Algorithms', 'core', 4, 3, 1),
-            _c('SE301', 'Software Design & Architecture', 'core', 3, 3, 0),
+            _c('SE301', 'Software Requirements Engineering', 'core', 3, 3, 0),
             _c('MTH201', 'Discrete Structures', 'core', 3, 3, 0),
             _c('MTH202', 'Probability & Statistics', 'core', 3, 3, 0),
             _c('HUM201', 'Civics & Community Engagement', 'core', 2, 2, 0),
         ],
         4: [
-            _c('SE302', 'Software Construction', 'core', 4, 3, 1),
+            _c('SE302', 'Software Design & Architecture', 'core', 3, 3, 0),
             _c('CS202', 'Database Systems', 'core', 4, 3, 1),
             _c('CS203', 'Operating Systems', 'core', 4, 3, 1),
-            _c('MTH203', 'Differential Equations', 'core', 3, 3, 0),
+            _c('SE303', 'Software Construction', 'core', 4, 3, 1),
         ],
         5: [
             _c('SE401', 'Software Quality Engineering', 'core', 3, 3, 0),
@@ -214,14 +214,14 @@ PROGRAM_CURRICULA = {
             _c('IT302', 'Operating Systems', 'core', 4, 3, 1),
             _c('IT303', 'Computer Networks', 'core', 4, 3, 1),
             _c('IT304', 'Human Computer Interaction', 'core', 3, 3, 0),
-            _c('MTH203', 'Differential Equations', 'core', 3, 3, 0),
+            _c('IT305', 'Software Engineering', 'core', 3, 3, 0),
         ],
         5: [
             _c('IT401', 'Information Security', 'core', 3, 3, 0),
             _c('IT402', 'System Administration', 'core', 4, 3, 1),
             _c('IT403', 'Cloud Computing', 'core', 3, 3, 0),
+            _c('IT404', 'Enterprise Systems', 'core', 3, 3, 0),
             _c('MGT301', 'Entrepreneurship', 'core', 3, 3, 0),
-            _c('IT404', 'Software Engineering', 'core', 3, 3, 0),
         ],
         6: [
             _c('IT501', 'Mobile Application Development', 'core', 4, 3, 1),
@@ -231,7 +231,7 @@ PROGRAM_CURRICULA = {
         ],
         7: [
             _c('IT601', 'Final Year Project I', 'core', 3, 0, 3),
-            _c('IT602', 'Enterprise Systems', 'core', 3, 3, 0),
+            _c('IT602', 'IT Project Management', 'core', 3, 3, 0),
             _c('IT6E1', 'Information Technology Elective II', 'elective', 3, 3, 0),
             _c('IT6E2', 'Information Technology Elective III', 'elective', 3, 3, 0),
             _c('MGT401', 'Professional Practices', 'core', 2, 2, 0),

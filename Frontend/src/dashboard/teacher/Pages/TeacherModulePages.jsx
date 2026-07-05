@@ -1,12 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { getMySections, getSectionStudents, submitFinalMarks } from '../../../services/sectionsService';
-import { listExaminations, enterMarks, listMarks } from '../../../services/examinationsService';
+import { listExaminations, enterMarks, listMarks, requestMarksEdit, getMarksLockStatus } from '../../../services/examinationsService';
 import { listAttendance, markAttendance, nextLectureNumber, teacherLeaves, reviewLeave } from '../../../services/attendanceService';
 import { listNotifications, listAnnouncements, createAnnouncement, getAnnouncementTargetOptions } from '../../../services/notificationsService';
 import { normalizeList } from '../../../services/api';
 import { PageHeader, useTableFilter, TablePagination, LoadingSpinner, EmptyRow, useToast, formatDate, getStatusBadgeClass } from '../../shared/helpers';
 import { PlusIcon, BookIcon, ClipboardIcon, FileIcon, BellIcon, XIcon } from '../../Icons';
+
+export const TeacherProfileModal = ({ profile, loading, onClose }) => (
+    <div className="modal-overlay" onClick={onClose}>
+        <div className="glass-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px', width: '95%' }}>
+            <div className="modal-header">
+                <h3>My Profile</h3>
+                <button className="close-btn" onClick={onClose}><XIcon /></button>
+            </div>
+            <div className="modal-body">
+                {loading ? <LoadingSpinner message="Loading profile..." /> : profile ? (
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                        <p><strong>Employee ID:</strong> {profile.employee_code}</p>
+                        <p><strong>Name:</strong> {profile.username}</p>
+                        <p><strong>Email:</strong> {profile.email}</p>
+                        <p><strong>Department:</strong> {profile.department_name}</p>
+                        <p><strong>Program:</strong> {profile.program_name || '—'}</p>
+                        <p><strong>Designation:</strong> {profile.designation_title}</p>
+                        <p><strong>Qualification:</strong> {profile.qualification}</p>
+                        <p><strong>Employment Type:</strong> {profile.employment_type}</p>
+                        <p><strong>Office Floor:</strong> {profile.office_floor || '—'}</p>
+                        <p><strong>Office Hours:</strong> {profile.office_hours || '—'}</p>
+                        {profile.employee_profile && (<>
+                            <hr />
+                            <p><strong>Phone:</strong> {profile.employee_profile.phone_number || '—'}</p>
+                            <p><strong>Address:</strong> {profile.employee_profile.current_address || '—'}</p>
+                        </>)}
+                    </div>
+                ) : <p>Unable to load profile.</p>}
+            </div>
+            <div className="modal-footer">
+                <button className="btn-secondary" onClick={onClose}>Close</button>
+            </div>
+        </div>
+    </div>
+);
 
 export const TeacherSectionsPage = () => {
     const { token } = useAuth();
@@ -91,6 +126,12 @@ export const TeacherAttendancePage = () => {
 
     const handleStatusChange = (studentId, status) => {
         setStudentStatuses(prev => ({ ...prev, [studentId]: status }));
+    };
+
+    const setAllStatuses = (status) => {
+        const next = {};
+        students.forEach((s) => { next[s.student_id] = status; });
+        setStudentStatuses(next);
     };
 
     const handleSubmit = async () => {
@@ -180,6 +221,12 @@ export const TeacherAttendancePage = () => {
                             </div>
 
                             <h4 style={{ margin: '16px 0 8px 0', borderBottom: '1px solid #eee', paddingBottom: '6px' }}>Enrolled Students Attendance Status</h4>
+                            {students.length > 0 && (
+                                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                                    <button type="button" className="btn-secondary" onClick={() => setAllStatuses('present')}>Mark All Present</button>
+                                    <button type="button" className="btn-secondary" onClick={() => setAllStatuses('absent')}>Mark All Absent</button>
+                                </div>
+                            )}
 
                             {fetchingStudents ? (
                                 <LoadingSpinner message="Loading enrolled students..." />
@@ -236,6 +283,9 @@ export const TeacherExaminationsPage = () => {
     const [students, setStudents] = useState([]);
     const [marksForm, setMarksForm] = useState({});
     const [showMarksModal, setShowMarksModal] = useState(false);
+    const [requestingEdit, setRequestingEdit] = useState(false);
+    const [lockStatus, setLockStatus] = useState(null);
+    const [studentEditMap, setStudentEditMap] = useState({});
 
     useEffect(() => {
         if (!token) return;
@@ -248,14 +298,21 @@ export const TeacherExaminationsPage = () => {
     const openMarks = async (exam) => {
         setSelectedExam(exam);
         setShowMarksModal(true);
+        setLockStatus(null);
+        setStudentEditMap({});
         try {
-            const [marksData, secStudents] = await Promise.all([
+            const [marksData, secStudents, lockData] = await Promise.all([
                 listMarks(exam.exam_id, token),
                 exam.section ? getSectionStudents(exam.section, token) : Promise.resolve([]),
+                getMarksLockStatus({ exam_id: exam.exam_id }, token),
             ]);
             const markList = normalizeList(marksData);
             setMarks(markList);
             setStudents(Array.isArray(secStudents) ? secStudents : []);
+            setLockStatus(lockData);
+            const editMap = {};
+            (lockData.students || []).forEach(s => { editMap[s.student_id] = s.editable; });
+            setStudentEditMap(editMap);
             const form = {};
             (Array.isArray(secStudents) ? secStudents : []).forEach(s => {
                 const existing = markList.find(m => m.student === s.student_id);
@@ -266,6 +323,9 @@ export const TeacherExaminationsPage = () => {
             alert('Failed to load marks');
         }
     };
+
+    const examNaturallyEditable = lockStatus?.naturally_editable ?? true;
+    const examFullyLocked = lockStatus && !lockStatus.naturally_editable;
 
     const saveMarks = async () => {
         if (!selectedExam) return;
@@ -280,6 +340,30 @@ export const TeacherExaminationsPage = () => {
             setShowMarksModal(false);
         } catch (e) {
             alert(e.response?.data?.error || 'Failed to save marks');
+        }
+    };
+
+    const handleRequestMarksEdit = async (studentId) => {
+        if (!selectedExam?.section) {
+            alert('This exam is not linked to a section.');
+            return;
+        }
+        const promptReason = window.prompt('Reason for marks edit request:');
+        if (promptReason === null || !promptReason.trim()) return;
+        setRequestingEdit(true);
+        try {
+            await requestMarksEdit({
+                section_id: selectedExam.section,
+                student_id: studentId,
+                exam_id: selectedExam.exam_id,
+                reason: promptReason.trim(),
+                hours: 48,
+            }, token);
+            showToast('Marks edit request submitted');
+        } catch (e) {
+            alert(e.response?.data?.error || 'Failed to submit request');
+        } finally {
+            setRequestingEdit(false);
         }
     };
 
@@ -333,22 +417,52 @@ export const TeacherExaminationsPage = () => {
                             <button className="close-btn" onClick={() => setShowMarksModal(false)}><XIcon /></button>
                         </div>
                         <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                            {lockStatus && (
+                                <div className="field-hint" style={{ marginBottom: 12, padding: '8px 12px', background: examNaturallyEditable ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', borderRadius: 6 }}>
+                                    {examNaturallyEditable
+                                        ? `Editable — semester phase: ${lockStatus.semester_phase?.replace('_', ' ')}`
+                                        : `Locked — ${lockStatus.lock_reason} Request admin approval per student.`}
+                                </div>
+                            )}
                             <table className="data-table">
-                                <thead><tr><th>Reg #</th><th>Student</th><th>Obtained Marks</th></tr></thead>
+                                <thead><tr><th>Reg #</th><th>Student</th><th>Obtained Marks</th><th>Request Edit</th></tr></thead>
                                 <tbody>
-                                    {students.map(s => (
+                                    {students.map(s => {
+                                        const canEdit = studentEditMap[s.student_id] ?? examNaturallyEditable;
+                                        return (
                                         <tr key={s.student_id}>
                                             <td>{s.registration_number}</td>
                                             <td>{s.username}</td>
-                                            <td><input type="number" className="field-input" style={{ maxWidth: '100px' }} value={marksForm[s.student_id] ?? ''} onChange={e => setMarksForm({ ...marksForm, [s.student_id]: e.target.value })} placeholder="Absent if empty" /></td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="field-input"
+                                                    style={{ maxWidth: '100px' }}
+                                                    value={marksForm[s.student_id] ?? ''}
+                                                    onChange={e => setMarksForm({ ...marksForm, [s.student_id]: e.target.value })}
+                                                    placeholder="Absent if empty"
+                                                    disabled={!canEdit}
+                                                />
+                                            </td>
+                                            <td>
+                                                {!canEdit && examFullyLocked && (
+                                                    <button className="action-btn" disabled={requestingEdit} onClick={() => handleRequestMarksEdit(s.student_id)}>
+                                                        Request Edit
+                                                    </button>
+                                                )}
+                                                {canEdit && !examNaturallyEditable && (
+                                                    <span className="field-hint">Approved</span>
+                                                )}
+                                            </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
                         <div className="modal-footer">
                             <button className="btn-secondary" onClick={() => setShowMarksModal(false)}>Cancel</button>
-                            <button className="btn-primary" onClick={saveMarks}>Save Marks</button>
+                            <button className="btn-primary" onClick={saveMarks} disabled={examFullyLocked && !Object.values(studentEditMap).some(Boolean)}>Save Marks</button>
                         </div>
                     </div>
                 </div>

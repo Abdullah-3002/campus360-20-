@@ -67,6 +67,7 @@ NOTIFICATION_TYPES = [
 BATCH_SECTIONS = ['Blue', 'Grey']
 
 from academics.curriculum_cs_programs import PROGRAM_CURRICULA, DEPARTMENT_CODE
+from academics.prerequisite_sync import sync_all_prerequisites, sync_program_prerequisites
 
 
 class Command(BaseCommand):
@@ -107,18 +108,37 @@ class Command(BaseCommand):
         year = today.year
 
         Semester.objects.filter(is_current=True).update(is_current=False)
+        end_date = today + timedelta(days=120)
         semester, _ = Semester.objects.update_or_create(
             semester_name=f'Spring {year}',
             defaults={
                 'academic_year': year,
                 'semester_type': 'spring',
                 'start_date': today,
-                'end_date': today + timedelta(days=120),
+                'end_date': end_date,
+                'mid_term_cutoff_date': today + timedelta(days=60),
+                'marks_grace_end_date': end_date + timedelta(days=7),
                 'registration_start_date': today - timedelta(days=14),
                 'registration_end_date': today + timedelta(days=14),
                 'is_current': True,
             },
         )
+
+        from examinations.models import ExamType
+        DEFAULT_EXAM_TYPES = [
+            ('Assignment 1', 5, 'pre_mid'),
+            ('Assignment 2', 5, 'pre_mid'),
+            ('Quiz 1', 5, 'pre_mid'),
+            ('Mid Term', 30, 'mid_term'),
+            ('Assignment 3', 5, 'post_mid'),
+            ('Quiz 2', 5, 'post_mid'),
+            ('Final Term', 45, 'final'),
+        ]
+        for type_name, weight, period in DEFAULT_EXAM_TYPES:
+            ExamType.objects.update_or_create(
+                type_name=type_name,
+                defaults={'weightage_percentage': weight, 'marks_period': period},
+            )
 
         designation, _ = Designation.objects.get_or_create(
             designation_title='Assistant Professor',
@@ -259,5 +279,6 @@ class Command(BaseCommand):
             f'ERP seed complete: semester={semester.semester_name}, '
             f'courses={courses_created}, program_course_links={program_links}, '
             f'sections={sections_created}, faculty={faculty.employee_code}, '
-            f'batch_sections={batch_sections_created}, cs_course_links={cs_links}'
+            f'batch_sections={batch_sections_created}, cs_course_links={cs_links}, '
+            f'prerequisites={sync_all_prerequisites()}, program_prerequisites={sync_program_prerequisites()}'
         ))

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const BASE_URL = 'http://localhost:8000/api';
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export const getAuthHeader = (token) => ({
   headers: { Authorization: `Bearer ${token}` }
@@ -32,3 +32,5 @@ export const apiDelete = async (url, token) => {
   const response = await axios.delete(`${BASE_URL}${url}`, getAuthHeader(token));
   return response.data;
 };
+
+export default axios;

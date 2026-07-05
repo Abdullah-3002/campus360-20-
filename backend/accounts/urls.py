@@ -26,4 +26,8 @@ urlpatterns = [
     path('roles/user/<int:user_id>/', views.get_user_roles, name='user-roles-specific'),
     path('users/change-type/', views.change_user_type, name='change-user-type'),
     path('admin/create-credentials/', views.create_user_credentials, name='create-credentials'),
+    path('audit-logs/', views.list_audit_logs, name='audit-logs'),
+    path('permissions/', views.list_app_permissions, name='app-permissions'),
+    path('role-permissions/', views.list_role_permissions, name='role-permissions'),
+    path('roles/<int:role_id>/permissions/', views.role_permissions_detail, name='role-permissions-detail'),
 ]

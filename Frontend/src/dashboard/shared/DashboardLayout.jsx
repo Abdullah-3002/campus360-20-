@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import ThemeToggle from '../../components/ThemeToggle';
 import '../../Dashboard.css';
@@ -10,18 +10,33 @@ const DashboardLayout = ({
     currentPage,
     onNavigate,
     onLogout,
+    onProfileClick,
     children,
     profileImage,
+    sidebarSubLabel,
 }) => {
     const { user } = useAuth();
     const [profileOpen, setProfileOpen] = useState(false);
     const [openMenus, setOpenMenus] = useState({});
 
     const userInfo = user || { username: 'User' };
+    const displaySubLabel = sidebarSubLabel || userInfo.registration_number;
 
     const toggleMenu = (key) => {
         setOpenMenus(prev => ({ ...prev, [key]: !prev[key] }));
     };
+
+    useEffect(() => {
+        const autoOpen = {};
+        navItems.forEach((item) => {
+            if (item.children?.some((child) => child.id === currentPage)) {
+                autoOpen[item.id] = true;
+            }
+        });
+        if (Object.keys(autoOpen).length) {
+            setOpenMenus((prev) => ({ ...prev, ...autoOpen }));
+        }
+    }, [currentPage, navItems]);
 
     const isActive = (item) => {
         if (item.id === currentPage) return true;
@@ -43,6 +58,11 @@ const DashboardLayout = ({
                     />
                     <div className="sidebar-user-info">
                         <div className="sidebar-user-id-compact">{userInfo.username}</div>
+                        {displaySubLabel && (
+                            <div className="sidebar-user-role-compact" style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                Reg No: {displaySubLabel}
+                            </div>
+                        )}
                         <div className="sidebar-user-role-compact">{roleLabel}</div>
                     </div>
                 </div>
@@ -118,7 +138,11 @@ const DashboardLayout = ({
                                 }}
                             />
                             <div className={`dropdown-menu ${profileOpen ? 'show' : ''}`}>
-                                <a href="#" className="dropdown-item" onClick={(e) => { e.preventDefault(); setProfileOpen(false); }}>
+                                <a href="#" className="dropdown-item" onClick={(e) => {
+                                    e.preventDefault();
+                                    setProfileOpen(false);
+                                    if (onProfileClick) onProfileClick();
+                                }}>
                                     <UserIcon /> Profile
                                 </a>
                                 <div className="dropdown-divider"></div>

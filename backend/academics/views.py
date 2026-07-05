@@ -2,8 +2,10 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from accounts.permissions import IsAdmin
-from .models import Department, DegreeProgram, Semester, Course, ProgramCourse
+from django.db.models import ProtectedError
+from accounts.permissions import IsAdmin, require_any_permission
+from accounts.audit import log_audit
+from .models import Department, DegreeProgram, Semester, Course, ProgramCourse, CoursePrerequisite
 from .serializers import (
     DepartmentSerializer, DegreeProgramSerializer,
     SemesterSerializer, CourseSerializer, ProgramCourseSerializer,
@@ -14,7 +16,7 @@ from .serializers import (
 # ── DEPARTMENTS ────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('academics.view_department', 'academics.view_program', 'admissions.view_application')])
 def list_departments(request):
     departments = Department.objects.all().order_by('department_name')
     if request.query_params.get('active_only') == '1':
@@ -57,14 +59,31 @@ def department_detail(request, department_id):
             {'error': 'Cannot delete department with linked programs. Remove programs first.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    department.delete()
+    blockers = []
+    if department.courses.exists():
+        blockers.append(f'{department.courses.count()} course(s)')
+    if department.faculty_members.exists():
+        blockers.append(f'{department.faculty_members.count()} faculty member(s)')
+    if blockers:
+        return Response(
+            {'error': f'Cannot delete department with linked {" and ".join(blockers)}. Remove them first.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        department.delete()
+    except ProtectedError:
+        return Response(
+            {'error': 'Cannot delete department because other records still reference it.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    log_audit(request, 'delete', 'department', department_id)
     return Response({'message': 'Department deleted.'}, status=status.HTTP_200_OK)
 
 
 # ── DEGREE PROGRAMS ────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('academics.view_program', 'admissions.submit_application', 'enrollments.view_enrollment')])
 def list_programs(request):
     programs = DegreeProgram.objects.select_related('department').filter(is_active=True)
     dept = request.query_params.get('department')
@@ -112,7 +131,7 @@ def program_detail(request, program_id):
 # ── SEMESTERS ─────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('academics.view_program', 'sections.view_section', 'enrollments.view_enrollment', 'attendance.view_attendance')])
 def list_semesters(request):
     semesters = Semester.objects.all().order_by('-academic_year', '-semester_type')
     return Response(SemesterSerializer(semesters, many=True).data)
@@ -147,7 +166,7 @@ def semester_detail(request, semester_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('academics.view_program', 'sections.view_section', 'enrollments.view_enrollment', 'attendance.view_attendance')])
 def get_current_semester(request):
     try:
         semester = Semester.objects.get(is_current=True)
@@ -159,7 +178,7 @@ def get_current_semester(request):
 # ── COURSES ───────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('academics.view_course', 'enrollments.view_enrollment', 'sections.view_section', 'examinations.view_examination')])
 def list_courses(request):
     courses = Course.objects.select_related('department').filter(is_active=True)
     dept = request.query_params.get('department')
@@ -210,7 +229,7 @@ def course_detail(request, course_id):
 # ── PROGRAM COURSES ───────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('academics.view_course', 'academics.view_program', 'enrollments.view_enrollment')])
 def list_program_courses(request, program_id):
     courses = ProgramCourse.objects.select_related(
         'course', 'course__department', 'program'
@@ -230,10 +249,15 @@ def add_program_course(request):
 
     data = serializer.validated_data
     try:
-        program = DegreeProgram.objects.get(program_id=data['program'])
-        department = Department.objects.get(department_id=data['department'])
-    except (DegreeProgram.DoesNotExist, Department.DoesNotExist):
-        return Response({'error': 'Invalid program or department.'}, status=status.HTTP_400_BAD_REQUEST)
+        program = DegreeProgram.objects.select_related('department').get(program_id=data['program'])
+    except DegreeProgram.DoesNotExist:
+        return Response({'error': 'Invalid program.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    department_id = data.get('department') or program.department_id
+    try:
+        department = Department.objects.get(department_id=department_id)
+    except Department.DoesNotExist:
+        return Response({'error': 'Invalid department.'}, status=status.HTTP_400_BAD_REQUEST)
 
     course, _ = Course.objects.update_or_create(
         course_code=data['course_code'],
@@ -255,6 +279,34 @@ def add_program_course(request):
         semester_number=data['semester_number'],
         defaults={'is_core': is_core},
     )
+
+    prereq_codes = data.get('prerequisite_codes') or []
+    if prereq_codes:
+        CoursePrerequisite.objects.filter(course=course).delete()
+        for code in prereq_codes:
+            if code.endswith('+ CH') or code.endswith('+ credit hours'):
+                continue
+            if '+' in code and 'CH' in code.upper():
+                try:
+                    min_ch = int(code.split('+')[0].strip())
+                    CoursePrerequisite.objects.get_or_create(
+                        course=course,
+                        prerequisite_type='credit_hours',
+                        min_credit_hours=min_ch,
+                        defaults={'prerequisite_course': None},
+                    )
+                except ValueError:
+                    pass
+                continue
+            prereq_course = Course.objects.filter(course_code=code).first()
+            if prereq_course:
+                CoursePrerequisite.objects.get_or_create(
+                    course=course,
+                    prerequisite_type='course',
+                    prerequisite_course=prereq_course,
+                    defaults={'min_credit_hours': None},
+                )
+
     status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return Response(ProgramCourseSerializer(pc).data, status=status_code)
 

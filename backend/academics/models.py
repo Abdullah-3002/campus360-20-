@@ -73,6 +73,8 @@ class Semester(models.Model):
     end_date                = models.DateField()
     registration_start_date = models.DateField()
     registration_end_date   = models.DateField()
+    mid_term_cutoff_date    = models.DateField(null=True, blank=True, help_text='After this, pre-mid + mid-term marks lock')
+    marks_grace_end_date    = models.DateField(null=True, blank=True, help_text='Default: end_date + 7 days')
     is_current              = models.BooleanField(default=False)
     created_at              = models.DateTimeField(auto_now_add=True)
 
@@ -124,4 +126,65 @@ class ProgramCourse(models.Model):
 
     def __str__(self):
         return f"{self.program.program_code} — {self.course.course_code} (Sem {self.semester_number})"
-    
+
+
+class CoursePrerequisite(models.Model):
+    PREREQUISITE_TYPE_CHOICES = [
+        ('course', 'Course'),
+        ('credit_hours', 'Minimum Credit Hours'),
+    ]
+
+    prerequisite_id = models.AutoField(primary_key=True)
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, related_name='prerequisites',
+    )
+    prerequisite_type = models.CharField(
+        max_length=20, choices=PREREQUISITE_TYPE_CHOICES, default='course',
+    )
+    prerequisite_course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='required_for_courses',
+    )
+    min_credit_hours = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'course_prerequisite'
+        unique_together = [
+            ['course', 'prerequisite_type', 'prerequisite_course'],
+            ['course', 'prerequisite_type', 'min_credit_hours'],
+        ]
+
+    def __str__(self):
+        if self.prerequisite_type == 'credit_hours':
+            return f"{self.course.course_code} requires {self.min_credit_hours}+ CH"
+        return f"{self.course.course_code} requires {self.prerequisite_course.course_code}"
+
+
+class ProgramCoursePrerequisite(models.Model):
+    """Program-scoped prerequisites (supports OR groups via or_group)."""
+    prerequisite_id = models.AutoField(primary_key=True)
+    program = models.ForeignKey(
+        DegreeProgram, on_delete=models.CASCADE, related_name='course_prerequisites',
+    )
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, related_name='program_prerequisites',
+    )
+    prerequisite_course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='required_for_program_courses',
+    )
+    min_credit_hours = models.IntegerField(null=True, blank=True)
+    or_group = models.PositiveSmallIntegerField(
+        default=0,
+        help_text='Same or_group on one course = OR; different groups = AND',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'program_course_prerequisite'
+
+    def __str__(self):
+        if self.min_credit_hours:
+            return f"{self.program.program_code}/{self.course.course_code}: {self.min_credit_hours}+ CH"
+        return f"{self.program.program_code}/{self.course.course_code}: {self.prerequisite_course.course_code}"

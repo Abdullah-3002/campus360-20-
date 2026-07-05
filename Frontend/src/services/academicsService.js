@@ -20,6 +20,8 @@ export const deleteProgram = (id, token) => apiDelete(`${BASE}/programs/${id}/`,
 
 export const listSemesters = (token) => apiGet(`${BASE}/semesters/`, token);
 export const getCurrentSemester = (token) => apiGet(`${BASE}/semesters/current/`, token);
+export const createSemester = (data, token) => apiPost(`${BASE}/semesters/create/`, data, token);
+export const updateSemester = (id, data, token) => apiPut(`${BASE}/semesters/${id}/`, data, token);
 
 export const listCourses = (token, params = '') => apiGet(`${BASE}/courses/${params}`, token);
 export const listProgramCourses = (programId, token, semester = '') => {

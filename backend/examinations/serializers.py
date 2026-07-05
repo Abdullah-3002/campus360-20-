@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import ExamType, Examination, ExamSchedule, Grade, Marks, FinalGrade, Result, ResultApproval
+from .models import (
+    ExamType, Examination, ExamSchedule, Grade, Marks, FinalGrade,
+    Result, ResultApproval, MarksEditPermission,
+)
 
 
 class ExamTypeSerializer(serializers.ModelSerializer):
@@ -69,3 +72,17 @@ class ResultApprovalSerializer(serializers.ModelSerializer):
         model = ResultApproval
         fields = '__all__'
         read_only_fields = ['approval_id', 'approval_date']
+
+
+class MarksEditPermissionSerializer(serializers.ModelSerializer):
+    student_reg = serializers.CharField(source='student.registration_number', read_only=True)
+    student_name = serializers.CharField(source='student.user.username', read_only=True)
+    section_name = serializers.CharField(source='section.section_name', read_only=True)
+    course_code = serializers.CharField(source='section.course.course_code', read_only=True)
+    teacher_name = serializers.CharField(source='granted_to.user.username', read_only=True)
+    exam_name = serializers.CharField(source='examination.exam_name', read_only=True)
+
+    class Meta:
+        model = MarksEditPermission
+        fields = '__all__'
+        read_only_fields = ['permission_id', 'created_at', 'granted_by', 'granted_to', 'reviewed_at']

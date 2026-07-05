@@ -1,7 +1,8 @@
 // src/services/admissionService.js
 import axios from 'axios';
+import { BASE_URL } from './api';
 
-const BASE_URL = 'http://localhost:8000/api/admissions';
+const ADMISSIONS_URL = `${BASE_URL}/admissions`;
 
 const getAuthHeader = (token) => ({
   headers: { Authorization: `Bearer ${token}` }
@@ -13,7 +14,7 @@ const getAuthHeader = (token) => ({
 
 export const getApplicantProfile = async (token, currentUsername = '') => {
   try {
-    const response = await axios.get(`${BASE_URL}/profile/`, getAuthHeader(token));
+    const response = await axios.get(`${ADMISSIONS_URL}/profile/`, getAuthHeader(token));
     const data = response.data;
     
     if (data.id) localStorage.setItem('applicantProfileId', data.id);
@@ -97,7 +98,7 @@ export const prepareProfileForBackend = (profileData) => {
 };
 
 export const saveApplicantProfile = async (profileData, token) => {
-  const response = await axios.post(`${BASE_URL}/profile/`, profileData, getAuthHeader(token));
+  const response = await axios.post(`${ADMISSIONS_URL}/profile/`, profileData, getAuthHeader(token));
   return response.data;
 };
 
@@ -106,17 +107,17 @@ export const saveApplicantProfile = async (profileData, token) => {
 // ============================================
 
 export const addAcademicRecord = async (recordData, token) => {
-  const response = await axios.post(`${BASE_URL}/academic/`, recordData, getAuthHeader(token));
+  const response = await axios.post(`${ADMISSIONS_URL}/academic/`, recordData, getAuthHeader(token));
   return response.data;
 };
 
 export const getAcademicRecords = async (token) => {
-  const response = await axios.get(`${BASE_URL}/academic/list/`, getAuthHeader(token));
+  const response = await axios.get(`${ADMISSIONS_URL}/academic/list/`, getAuthHeader(token));
   return response.data;
 };
 
 export const deleteAcademicRecord = async (recordId, token) => {
-  const response = await axios.delete(`${BASE_URL}/academic/${recordId}/`, getAuthHeader(token));
+  const response = await axios.delete(`${ADMISSIONS_URL}/academic/${recordId}/`, getAuthHeader(token));
   return response.data;
 };
 
@@ -125,22 +126,22 @@ export const deleteAcademicRecord = async (recordId, token) => {
 // ============================================
 
 export const getAdmissionPrograms = async (token) => {
-  const response = await axios.get(`${BASE_URL}/programs/`, getAuthHeader(token));
+  const response = await axios.get(`${ADMISSIONS_URL}/programs/`, getAuthHeader(token));
   return response.data;
 };
 
 export const submitApplication = async (applicationData, token) => {
-  const response = await axios.post(`${BASE_URL}/application/`, applicationData, getAuthHeader(token));
+  const response = await axios.post(`${ADMISSIONS_URL}/application/`, applicationData, getAuthHeader(token));
   return response.data;
 };
 
 export const getMyApplications = async (token) => {
-  const response = await axios.get(`${BASE_URL}/application/`, getAuthHeader(token));
+  const response = await axios.get(`${ADMISSIONS_URL}/application/`, getAuthHeader(token));
   return response.data;
 };
 
 export const deleteApplication = async (applicationId, token) => {
-  const response = await axios.delete(`${BASE_URL}/application/${applicationId}/`, getAuthHeader(token));
+  const response = await axios.delete(`${ADMISSIONS_URL}/application/${applicationId}/`, getAuthHeader(token));
   return response.data;
 };
 
@@ -149,7 +150,7 @@ export const deleteApplication = async (applicationId, token) => {
 // ============================================
 
 export const getMyDocuments = async (token) => {
-  const response = await axios.get(`${BASE_URL}/documents/`, getAuthHeader(token));
+  const response = await axios.get(`${ADMISSIONS_URL}/documents/`, getAuthHeader(token));
   console.log('Raw API response for documents:', response.data);
   return response.data;
 };
@@ -159,7 +160,7 @@ export const uploadDocument = async (documentData, token) => {
   formData.append('file', documentData.file);
   formData.append('document_type', documentData.document_type);
   
-  const response = await axios.post(`${BASE_URL}/documents/upload/`, formData, {
+  const response = await axios.post(`${ADMISSIONS_URL}/documents/upload/`, formData, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'multipart/form-data'
@@ -169,7 +170,7 @@ export const uploadDocument = async (documentData, token) => {
 };
 
 export const deleteDocument = async (documentId, token) => {
-  const response = await axios.delete(`${BASE_URL}/documents/${documentId}/`, getAuthHeader(token));
+  const response = await axios.delete(`${ADMISSIONS_URL}/documents/${documentId}/`, getAuthHeader(token));
   return response.data;
 };
 
@@ -178,7 +179,7 @@ export const deleteDocument = async (documentId, token) => {
 // ============================================
 
 export const adminListApplications = async (token, filters = {}) => {
-  const response = await axios.get(`${BASE_URL}/admin/applications/`, {
+  const response = await axios.get(`${ADMISSIONS_URL}/admin/applications/`, {
     ...getAuthHeader(token),
     params: filters,
   });
@@ -186,13 +187,13 @@ export const adminListApplications = async (token, filters = {}) => {
 };
 
 export const adminGetApplicationDetail = async (applicationId, token) => {
-  const response = await axios.get(`${BASE_URL}/admin/applications/${applicationId}/`, getAuthHeader(token));
+  const response = await axios.get(`${ADMISSIONS_URL}/admin/applications/${applicationId}/`, getAuthHeader(token));
   return response.data;
 };
 
 export const adminMakeDecision = async (applicationId, decisionData, token) => {
   const response = await axios.post(
-    `${BASE_URL}/admin/applications/${applicationId}/decide/`,
+    `${ADMISSIONS_URL}/admin/applications/${applicationId}/decide/`,
     decisionData,
     getAuthHeader(token)
   );
@@ -201,7 +202,7 @@ export const adminMakeDecision = async (applicationId, decisionData, token) => {
 
 export const adminConfirmRegistration = async (applicationId, token) => {
   const response = await axios.post(
-    `${BASE_URL}/admin/applications/${applicationId}/confirm-registration/`,
+    `${ADMISSIONS_URL}/admin/applications/${applicationId}/confirm-registration/`,
     {},
     getAuthHeader(token)
   );
@@ -210,7 +211,7 @@ export const adminConfirmRegistration = async (applicationId, token) => {
 
 export const adminDownloadDocument = async (applicationId, docId, token) => {
   const response = await axios.get(
-    `${BASE_URL}/admin/applications/${applicationId}/documents/${docId}/download/`,
+    `${ADMISSIONS_URL}/admin/applications/${applicationId}/documents/${docId}/download/`,
     { ...getAuthHeader(token), responseType: 'blob' }
   );
   return response;
@@ -218,7 +219,7 @@ export const adminDownloadDocument = async (applicationId, docId, token) => {
 
 export const adminVerifyDocument = async (applicationId, docId, token) => {
   const response = await axios.post(
-    `${BASE_URL}/admin/applications/${applicationId}/documents/${docId}/verify/`,
+    `${ADMISSIONS_URL}/admin/applications/${applicationId}/documents/${docId}/verify/`,
     {},
     getAuthHeader(token)
   );
@@ -227,7 +228,7 @@ export const adminVerifyDocument = async (applicationId, docId, token) => {
 
 export const adminReviewChallan = async (applicationId, action, remarks, token) => {
   const response = await axios.post(
-    `${BASE_URL}/admin/applications/${applicationId}/challan-review/`,
+    `${ADMISSIONS_URL}/admin/applications/${applicationId}/challan-review/`,
     { action, remarks },
     getAuthHeader(token)
   );
@@ -236,7 +237,7 @@ export const adminReviewChallan = async (applicationId, action, remarks, token) 
 
 export const adminDeleteApplication = async (applicationId, token) => {
   const response = await axios.delete(
-    `${BASE_URL}/admin/applications/${applicationId}/delete/`,
+    `${ADMISSIONS_URL}/admin/applications/${applicationId}/delete/`,
     getAuthHeader(token)
   );
   return response.data;
@@ -254,7 +255,7 @@ export const getApplicationChallanPending = (applications) => {
 };
 
 export const downloadAdmissionChallan = async (token, format = 'pdf') => {
-  const response = await axios.get(`${BASE_URL}/challan/download/`, {
+  const response = await axios.get(`${ADMISSIONS_URL}/challan/download/`, {
     ...getAuthHeader(token),
     params: format === 'json' ? { format: 'json' } : {},
     responseType: format === 'pdf' ? 'blob' : 'json',

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from accounts.permissions import IsAdmin, IsStudent
 from academics.models import Semester
+from academics.prerequisite_utils import check_course_prerequisites
 from sections.models import Section
 from students.models import Student
 from .models import Enrollment, CourseRegistration
@@ -64,6 +65,13 @@ def register_courses(request):
 
         if CourseRegistration.objects.filter(enrollment=enrollment, course=section.course).exists():
             errors.append(f"{section.course.course_code} is already registered.")
+            continue
+
+        ok, missing = check_course_prerequisites(student, section.course)
+        if not ok:
+            errors.append(
+                f"{section.course.course_code} requires: {', '.join(missing)}."
+            )
             continue
 
         reg = CourseRegistration.objects.create(

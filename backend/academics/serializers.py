@@ -47,20 +47,33 @@ class ProgramCourseSerializer(serializers.ModelSerializer):
     course_type = serializers.CharField(source='course.course_type', read_only=True)
     department_id = serializers.IntegerField(source='course.department_id', read_only=True)
     department_name = serializers.CharField(source='course.department.department_name', read_only=True)
+    prerequisites = serializers.SerializerMethodField()
 
     class Meta:
         model = ProgramCourse
         fields = '__all__'
         read_only_fields = ['program_course_id', 'created_at']
 
+    def get_prerequisites(self, obj):
+        codes = []
+        for p in obj.course.prerequisites.select_related('prerequisite_course'):
+            if p.prerequisite_type == 'credit_hours':
+                codes.append(f'{p.min_credit_hours}+ CH')
+            elif p.prerequisite_course:
+                codes.append(p.prerequisite_course.course_code)
+        return codes
+
 
 class ProgramCourseCreateSerializer(serializers.Serializer):
     program = serializers.IntegerField()
     semester_number = serializers.IntegerField(min_value=1, max_value=12)
-    department = serializers.IntegerField()
+    department = serializers.IntegerField(required=False, allow_null=True)
     course_code = serializers.CharField(max_length=20)
     course_name = serializers.CharField(max_length=200)
     course_type = serializers.ChoiceField(choices=['core', 'elective', 'university_requirement'])
     credit_hours = serializers.IntegerField(min_value=1)
     theory_credit_hours = serializers.IntegerField(min_value=0, default=0)
     lab_credit_hours = serializers.IntegerField(min_value=0, default=0)
+    prerequisite_codes = serializers.ListField(
+        child=serializers.CharField(max_length=20), required=False, default=list,
+    )

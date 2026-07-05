@@ -10,7 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from accounts.permissions import IsAdmin
+from accounts.permissions import require_permission, require_any_permission, IsAdmissionApplicant
+from accounts.audit import log_audit
 from accounts.models import UserRole, Role
 from students.models import Student, StudentProfile
 from academics.models import DegreeProgram, Semester, ProgramCourse
@@ -218,7 +219,6 @@ def _sync_user_role(user, role_key, assigned_by=None):
     role_name_map = {
         'student': 'Student',
         'teacher': 'Teacher',
-        'staff': 'Staff',
         'admin': 'Admin',
         'applicant': 'Applicant',
     }
@@ -343,6 +343,21 @@ def _purge_stale_applications():
     return deleted
 
 
+def _resolve_batch_section(program, batch_year, section_name):
+    if not section_name:
+        return None
+    from sections.models import BatchSection
+    name = str(section_name).strip()
+    bs = BatchSection.objects.filter(
+        program=program, batch_year=batch_year, section_name__iexact=name,
+    ).first()
+    if bs:
+        return bs
+    return BatchSection.objects.filter(
+        program=program, batch_year=batch_year, section_name__icontains=name,
+    ).first()
+
+
 def _register_approved_student(application, performed_by):
     """Create student record and convert applicant to student."""
     applicant = application.applicant
@@ -362,6 +377,7 @@ def _register_approved_student(application, performed_by):
     ).count()
     registration_number = f"{application.program.program_code}-{batch_year}-{str(existing_count + 1).zfill(4)}"
 
+    bs = _resolve_batch_section(application.program, batch_year, offered_sec)
     student = Student.objects.create(
         user=user,
         applicant=applicant,
@@ -369,7 +385,8 @@ def _register_approved_student(application, performed_by):
         registration_number=registration_number,
         batch_year=batch_year,
         admission_date=timezone.now().date(),
-        section=offered_sec,
+        batch_section=bs,
+        section=bs.section_name if bs else offered_sec,
     )
     StudentProfile.objects.create(
         student=student,
@@ -395,7 +412,7 @@ def _register_approved_student(application, performed_by):
 # ========== EXISTING VIEWS ==========
 
 @api_view(['POST', 'GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def applicant_profile(request):
     if request.method == 'GET':
         try:
@@ -416,7 +433,7 @@ def applicant_profile(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def add_academic_record(request):
     try:
         applicant = Applicant.objects.get(user=request.user)
@@ -434,7 +451,7 @@ def add_academic_record(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def get_academic_records(request):
     try:
         applicant = Applicant.objects.get(user=request.user)
@@ -445,7 +462,7 @@ def get_academic_records(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('admissions.submit_application', 'admissions.view_own_application')])
 def list_admission_programs(request):
     programs = DegreeProgram.objects.select_related('department').filter(
         is_active=True,
@@ -455,7 +472,7 @@ def list_admission_programs(request):
 
 
 @api_view(['POST', 'GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def admission_application(request):
     if request.method == 'GET':
         try:
@@ -581,7 +598,7 @@ def admission_application(request):
 # ========== DOCUMENT VIEWS ==========
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def get_my_documents(request):
     """Get all documents for the current applicant"""
     try:
@@ -594,7 +611,7 @@ def get_my_documents(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def upload_document(request):
     """Upload a document for the current applicant"""
     try:
@@ -615,6 +632,13 @@ def upload_document(request):
                 {'error': 'No pending admission challan found for your application.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if app.challan_rejected_at:
+            deadline = app.challan_rejected_at + timedelta(days=15)
+            if timezone.now() > deadline:
+                return Response(
+                    {'error': 'Re-upload deadline expired. Contact admissions office.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
     elif _applicant_has_submitted_application(applicant):
         return _locked_response()
     
@@ -757,7 +781,7 @@ def upload_document(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def download_admission_challan(request):
     """Download admission challan as PDF or JSON metadata."""
     from django.http import HttpResponse
@@ -789,7 +813,7 @@ def download_admission_challan(request):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def delete_document(request, doc_id):
     """Delete a document by ID"""
     try:
@@ -824,7 +848,7 @@ def delete_document(request, doc_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def download_document(request, doc_id):
     """Download a document file"""
     try:
@@ -849,7 +873,7 @@ def download_document(request, doc_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def delete_application(request, app_id):
     """Delete an application by ID"""
     try:
@@ -885,7 +909,7 @@ def delete_application(request, app_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmissionApplicant])
 def delete_academic_record(request, record_id):
     """Delete an academic record by ID"""
     try:
@@ -905,7 +929,7 @@ def delete_academic_record(request, record_id):
 # ── Admin endpoints ───────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.view_application')])
 def admin_list_applications(request):
     _purge_stale_applications()
 
@@ -942,7 +966,7 @@ def admin_list_applications(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.view_application')])
 def admin_application_detail(request, application_id):
     try:
         application = AdmissionApplication.objects.select_related(
@@ -959,7 +983,7 @@ def admin_application_detail(request, application_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.view_application')])
 def admin_download_document(request, application_id, doc_id):
     try:
         application = AdmissionApplication.objects.select_related('applicant').get(id=application_id)
@@ -980,7 +1004,7 @@ def admin_download_document(request, application_id, doc_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.decide_application')])
 def make_decision(request, application_id):
     try:
         application = AdmissionApplication.objects.get(id=application_id)
@@ -1046,6 +1070,8 @@ def make_decision(request, application_id):
 
         new_status = application.status
         _log(application, decision_value, request.user, prev, new_status, request, remarks=remarks_val)
+        log_audit(request, f'admission_{decision_value}', 'admission_application', application.application_id,
+                  new_value={'decision': decision_value, 'registration': registration_info})
 
     response_data = {
         'message': f'Application {decision_value}.' + (
@@ -1061,7 +1087,7 @@ def make_decision(request, application_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.decide_application')])
 def admin_delete_application(request, application_id):
     try:
         application = AdmissionApplication.objects.select_related('applicant__user').get(id=application_id)
@@ -1080,7 +1106,7 @@ def admin_delete_application(request, application_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.view_application')])
 def admin_verify_document(request, application_id, doc_id):
     """Admin verifies/approves a specific applicant document"""
     try:
@@ -1105,7 +1131,7 @@ def admin_verify_document(request, application_id, doc_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.decide_application')])
 def admin_review_challan(request, application_id):
     """Accept or reject uploaded admission challan."""
     try:
@@ -1142,7 +1168,8 @@ def admin_review_challan(request, application_id):
 
     application.status = 'challan_pending'
     application.challan_paid = False
-    application.save(update_fields=['status', 'challan_paid'])
+    application.challan_rejected_at = timezone.now()
+    application.save(update_fields=['status', 'challan_paid', 'challan_rejected_at'])
     if paid_doc:
         paid_doc.is_verified = False
         paid_doc.save(update_fields=['is_verified'])
@@ -1152,7 +1179,7 @@ def admin_review_challan(request, application_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('admissions.decide_application')])
 def confirm_student_registration(request, application_id):
     """
     Admin confirms registration after approval.

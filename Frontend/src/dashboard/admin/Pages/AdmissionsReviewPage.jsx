@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
+import { listBatchSections } from '../../../services/sectionsService';
 import {
     adminListApplications,
     adminGetApplicationDetail,
@@ -73,10 +73,8 @@ const AdmissionsReviewPage = () => {
 
     const fetchBatchSections = async () => {
         try {
-            const res = await axios.get('http://localhost:8000/api/sections/batch/', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setBatchSections(Array.isArray(res.data) ? res.data : []);
+            const data = await listBatchSections(token);
+            setBatchSections(Array.isArray(data) ? data : []);
         } catch (e) {
             console.error(e);
         }

@@ -1,50 +1,93 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { getCurrentUser, logoutUser } from '../services/authService';
+import {
+    getStoredToken, getStoredUser, persistAuth, clearAuthStorage, migrateLegacyAuthStorage,
+} from '../utils/authStorage';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-    // Load initial state from localStorage
-    const [user, setUser] = useState(() => {
-        const savedUser = localStorage.getItem('user');
-        return savedUser ? JSON.parse(savedUser) : null;
-    });
-    
-    const [token, setToken] = useState(() => {
-        return localStorage.getItem('token') || null;
-    });
+    migrateLegacyAuthStorage();
 
-    // Save to localStorage whenever user or token changes
-    useEffect(() => {
-        if (user) {
-            localStorage.setItem('user', JSON.stringify(user));
-        } else {
-            localStorage.removeItem('user');
-        }
-    }, [user]);
+    const [user, setUser] = useState(() => getStoredUser());
+    const [token, setToken] = useState(() => getStoredToken());
+    const [authReady, setAuthReady] = useState(() => !getStoredToken());
+
+    const applyUser = useCallback((data) => {
+        setUser((prev) => ({
+            ...prev,
+            ...data,
+            permissions: data.permissions || [],
+            roles: data.roles || prev?.roles || [],
+        }));
+    }, []);
 
     useEffect(() => {
-        if (token) {
-            localStorage.setItem('token', token);
-        } else {
-            localStorage.removeItem('token');
+        persistAuth(user, token);
+    }, [user, token]);
+
+    // Always refresh user + permissions from API when a token exists
+    useEffect(() => {
+        if (!token) {
+            setAuthReady(true);
+            return;
         }
-    }, [token]);
+
+        let cancelled = false;
+        setAuthReady(false);
+
+        getCurrentUser(token)
+            .then((data) => {
+                if (cancelled) return;
+                applyUser(data);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                clearAuthStorage();
+                setUser(null);
+                setToken(null);
+            })
+            .finally(() => {
+                if (!cancelled) setAuthReady(true);
+            });
+
+        return () => { cancelled = true; };
+    }, [token, applyUser]);
+
+    const permissions = user?.permissions || [];
+
+    const hasPermission = (perm) => {
+        if (!permissions.length) return false;
+        if (permissions.includes('*')) return true;
+        return permissions.includes(perm);
+    };
+
+    const hasAnyPermission = (...perms) => perms.some((p) => hasPermission(p));
 
     const login = (userData, authToken) => {
         setUser(userData);
         setToken(authToken);
+        setAuthReady(false);
     };
 
-    const logout = () => {
+    const logout = async () => {
+        try {
+            if (token) await logoutUser(token);
+        } catch {
+            // still clear client state
+        }
         setUser(null);
         setToken(null);
+        setAuthReady(true);
+        clearAuthStorage();
         localStorage.removeItem('profileData');
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, login, logout }}>
+        <AuthContext.Provider value={{
+            user, token, permissions, authReady,
+            hasPermission, hasAnyPermission, login, logout,
+        }}>
             {children}
         </AuthContext.Provider>
     );

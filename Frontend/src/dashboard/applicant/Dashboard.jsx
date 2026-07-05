@@ -1,6 +1,9 @@
 // src/dashboard/applicant/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { pageIdFromPath } from '../../routes/paths';
+import { useDashboardNavigate } from '../../routes/useDashboardNavigate';
 import { getApplicantProfile, getMyDocuments, getAcademicRecords, getMyApplications, isApplicationLocked, hasRejectedApplication, getApplicationChallanPending } from '../../services/admissionService';
 import { mergeProfileDraft, saveFormDraft } from '../../utils/formDraft';
 import { hasMatricAndInter } from '../../utils/validation';
@@ -113,14 +116,7 @@ const isProfileComplete = (profileData) => {
 const hasAllDocuments = (documents) => {
     const requiredDocuments = ['cnic_front', 'cnic_back', 'domicile', 'photograph'];
     const uploadedTypes = documents.map(doc => doc.document_type);
-    
-    console.log('Required documents:', requiredDocuments);
-    console.log('Uploaded types:', uploadedTypes);
-    
-    const result = requiredDocuments.every(type => uploadedTypes.includes(type));
-    console.log('Has all documents:', result);
-    
-    return result;
+    return requiredDocuments.every(type => uploadedTypes.includes(type));
 };
 
 // Check if academic records exist (both Matric and Inter required)
@@ -128,10 +124,78 @@ const hasAcademicRecords = (records) => {
     return hasMatricAndInter(records);
 };
 
+// ========== PROFILE PAGE ==========
+
+function ApplicantProfilePage({
+    activeTab,
+    navigateToTab,
+    tabLabels,
+    getTabStatus,
+    canAccessTab,
+    profileData,
+    renderActiveTab,
+}) {
+    return (
+        <>
+            <div className="page-header-minimal">
+                <div className="breadcrumb-minimal">DASHBOARD &nbsp;&gt;&nbsp; USER MANAGEMENT &nbsp;&gt;&nbsp; {tabLabels[activeTab]}</div>
+                <h1 className="page-title-minimal">Complete Profile</h1>
+            </div>
+            <div className="step-navigation">
+                <div
+                    className={`step-item ${activeTab === 'personal' ? 'active' : ''} ${getTabStatus('personal') ? 'completed' : ''}`}
+                    onClick={() => navigateToTab('personal')}
+                >
+                    <div className="step-icon-wrapper"><UserIcon /></div>
+                    <span className="step-label">Personal Details</span>
+                    {getTabStatus('personal') && <span className="step-check">✓</span>}
+                </div>
+                <div className="step-connector"></div>
+                <div
+                    className={`step-item ${activeTab === 'residence' ? 'active' : ''} ${getTabStatus('residence') ? 'completed' : ''} ${!canAccessTab(profileData, 'residence') ? 'disabled' : ''}`}
+                    onClick={() => navigateToTab('residence')}
+                    style={{ cursor: canAccessTab(profileData, 'residence') ? 'pointer' : 'not-allowed', opacity: canAccessTab(profileData, 'residence') ? 1 : 0.5 }}
+                >
+                    <div className="step-icon-wrapper"><MapPinIcon /></div>
+                    <span className="step-label">Address Details</span>
+                    {getTabStatus('residence') && <span className="step-check">✓</span>}
+                </div>
+                <div className="step-connector"></div>
+                <div
+                    className={`step-item ${activeTab === 'emergency' ? 'active' : ''} ${getTabStatus('emergency') ? 'completed' : ''} ${!canAccessTab(profileData, 'emergency') ? 'disabled' : ''}`}
+                    onClick={() => navigateToTab('emergency')}
+                    style={{ cursor: canAccessTab(profileData, 'emergency') ? 'pointer' : 'not-allowed', opacity: canAccessTab(profileData, 'emergency') ? 1 : 0.5 }}
+                >
+                    <div className="step-icon-wrapper"><PhoneIcon /></div>
+                    <span className="step-label">Emergency Contact</span>
+                    {getTabStatus('emergency') && <span className="step-check">✓</span>}
+                </div>
+                <div className="step-connector"></div>
+                <div
+                    className={`step-item ${activeTab === 'guardian' ? 'active' : ''} ${getTabStatus('guardian') ? 'completed' : ''} ${!canAccessTab(profileData, 'guardian') ? 'disabled' : ''}`}
+                    onClick={() => navigateToTab('guardian')}
+                    style={{ cursor: canAccessTab(profileData, 'guardian') ? 'pointer' : 'not-allowed', opacity: canAccessTab(profileData, 'guardian') ? 1 : 0.5 }}
+                >
+                    <div className="step-icon-wrapper"><ShieldIcon /></div>
+                    <span className="step-label">Guardian Details</span>
+                    {getTabStatus('guardian') && <span className="step-check">✓</span>}
+                </div>
+            </div>
+            {renderActiveTab()}
+        </>
+    );
+}
+
 // ========== MAIN DASHBOARD COMPONENT ==========
 
-const Dashboard = ({ setView, user }) => {
+const APPLICANT_BASE = '/applicant';
+
+const Dashboard = () => {
     const { token, user: authUser, logout: authLogout } = useAuth();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const goToPage = useDashboardNavigate(APPLICANT_BASE);
+    const currentPage = pageIdFromPath(location.pathname, APPLICANT_BASE);
     const [activeTab, setActiveTab] = useState('personal');
     const [profileData, setProfileData] = useState(() => {
         const saved = localStorage.getItem('profileData');
@@ -165,10 +229,9 @@ const Dashboard = ({ setView, user }) => {
     const [isRejected, setIsRejected] = useState(false);
     const [loading, setLoading] = useState(true);
     
-    const [currentPage, setCurrentPage] = useState('home');
     const [profileOpen, setProfileOpen] = useState(false);
     const [admissionOpen, setAdmissionOpen] = useState(true);
-    const studentInfo = authUser || user || { username: 'Student', user_id: 'N/A' };
+    const studentInfo = authUser || { username: 'Student', user_id: 'N/A' };
     
     const initialLoadDone = useRef(false);
     const isMounted = useRef(true);
@@ -178,7 +241,6 @@ const Dashboard = ({ setView, user }) => {
         if (!token || !isMounted.current) return;
         try {
             const docs = await getMyDocuments(token);
-            console.log('Refreshed documents from API:', docs);
             if (isMounted.current) {
                 setDocuments(Array.isArray(docs) ? docs : []);
             }
@@ -192,7 +254,6 @@ const Dashboard = ({ setView, user }) => {
         if (!token || !isMounted.current) return;
         try {
             const records = await getAcademicRecords(token);
-            console.log('Refreshed academic records:', records);
             if (isMounted.current) {
                 setAcademicRecords(Array.isArray(records) ? records : []);
             }
@@ -238,11 +299,9 @@ const Dashboard = ({ setView, user }) => {
                 if (isMounted.current) setProfileData(prev => ({ ...prev, ...mergedProfile }));
                 
                 const docs = await getMyDocuments(token);
-                console.log('Loaded documents from API:', docs);
                 if (isMounted.current) setDocuments(Array.isArray(docs) ? docs : []);
                 
                 const records = await getAcademicRecords(token);
-                console.log('Loaded academic records from API:', records);
                 if (isMounted.current) setAcademicRecords(Array.isArray(records) ? records : []);
 
                 const apps = await getMyApplications(token);
@@ -288,10 +347,10 @@ const Dashboard = ({ setView, user }) => {
         }));
     };
 
-    const handleLogout = (e) => {
+    const handleLogout = async (e) => {
         e.preventDefault();
-        authLogout();
-        setView('landing');
+        await authLogout();
+        navigate('/');
     };
 
     // Tab navigation with sequential validation
@@ -304,80 +363,68 @@ const Dashboard = ({ setView, user }) => {
             return;
         }
         setActiveTab(tabName);
-        setCurrentPage('profile');
+        goToPage('profile');
     };
 
     // Navigation to Personal Documents - requires Personal Details
     const navigateToPersonalDocuments = () => {
         if (!isPersonalDetailsComplete(profileData)) {
             alert('Please complete your Personal Details first before accessing Documents.');
-            setCurrentPage('profile');
+            goToPage('profile');
             setActiveTab('personal');
             return;
         }
-        setCurrentPage('personal-docs');
+        goToPage('personal-docs');
     };
 
     // Navigation to Academic Information - requires ALL Personal Documents
     const navigateToAcademicInfo = () => {
-        console.log('=== navigateToAcademicInfo Debug ===');
-        console.log('Profile complete:', isProfileComplete(profileData));
-        console.log('Documents array:', documents);
-        console.log('Document types:', documents.map(doc => doc.document_type));
-        console.log('Has all documents:', hasAllDocuments(documents));
-        
         if (!isProfileComplete(profileData)) {
             const nextRequired = getNextRequiredTab(profileData);
             alert(`Please complete all profile sections first. Next: ${nextRequired === 'personal' ? 'Personal Details' : 
                    nextRequired === 'residence' ? 'Address Details' :
                    nextRequired === 'emergency' ? 'Emergency Contact' : 'Guardian Details'}`);
-            setCurrentPage('profile');
+            goToPage('profile');
             setActiveTab(nextRequired || 'personal');
             return;
         }
         if (!hasAllDocuments(documents)) {
             alert('Please upload all required Personal Documents (CNIC Front, CNIC Back, Domicile, Photograph) first.');
-            setCurrentPage('personal-docs');
+            goToPage('personal-docs');
             return;
         }
-        setCurrentPage('academic-info');
+        goToPage('academic-info');
     };
 
     // Navigation to Application List - requires ALL profile tabs, ALL documents, AND academic records
     const navigateToApplicationList = () => {
-        console.log('=== navigateToApplicationList Debug ===');
-        console.log('Profile complete:', isProfileComplete(profileData));
-        console.log('Has all documents:', hasAllDocuments(documents));
-        console.log('Academic records:', academicRecords);
-        console.log('Has academic records:', hasAcademicRecords(academicRecords));
-        
         if (!isProfileComplete(profileData)) {
             const nextRequired = getNextRequiredTab(profileData);
             alert(`Please complete all profile sections first. Next: ${nextRequired === 'personal' ? 'Personal Details' : 
                    nextRequired === 'residence' ? 'Address Details' :
                    nextRequired === 'emergency' ? 'Emergency Contact' : 'Guardian Details'}`);
-            setCurrentPage('profile');
+            goToPage('profile');
             setActiveTab(nextRequired || 'personal');
             return;
         }
         if (!hasAllDocuments(documents)) {
             alert('Please upload all required Personal Documents (CNIC Front, CNIC Back, Domicile, Photograph) first.');
-            setCurrentPage('personal-docs');
+            goToPage('personal-docs');
             return;
         }
         if (!hasAcademicRecords(academicRecords)) {
             alert('Please add both Matric and Intermediate academic records before proceeding.');
-            setCurrentPage('academic-info');
+            goToPage('academic-info');
             return;
         }
-        setCurrentPage('application-list');
+        goToPage('application-list');
     };
 
     // Navigation to New Application - requires ALL profile tabs, ALL documents, AND academic records, AND no existing application
     const navigateToNewApplication = async () => {
         if (isLocked) {
             alert('Your application has already been submitted. You cannot create a new one.');
-            setCurrentPage('application-list');
+            goToPage('application-list');
             return;
         }
 
@@ -388,7 +435,7 @@ const Dashboard = ({ setView, user }) => {
             
             if (appsArray.length > 0) {
                 alert('You already have a submitted application.');
-                setCurrentPage('application-list');
+                goToPage('application-list');
                 return;
             }
         } catch (error) {
@@ -401,21 +448,21 @@ const Dashboard = ({ setView, user }) => {
             alert(`Please complete all profile sections first. Next: ${nextRequired === 'personal' ? 'Personal Details' : 
                    nextRequired === 'residence' ? 'Address Details' :
                    nextRequired === 'emergency' ? 'Emergency Contact' : 'Guardian Details'}`);
-            setCurrentPage('profile');
+            goToPage('profile');
             setActiveTab(nextRequired || 'personal');
             return;
         }
         if (!hasAllDocuments(documents)) {
             alert('Please upload all required Personal Documents (CNIC Front, CNIC Back, Domicile, Photograph) first.');
-            setCurrentPage('personal-docs');
+            goToPage('personal-docs');
             return;
         }
         if (!hasAcademicRecords(academicRecords)) {
             alert('Please add both Matric and Intermediate academic records before proceeding.');
-            setCurrentPage('academic-info');
+            goToPage('academic-info');
             return;
         }
-        setCurrentPage('application-form');
+        goToPage('application-form');
     };
 
     const tabLabels = {
@@ -497,7 +544,7 @@ const Dashboard = ({ setView, user }) => {
                 <nav className="sidebar-nav">
                     <a 
                         className={`sidebar-link ${currentPage === 'home' ? 'active' : ''}`} 
-                        onClick={() => setCurrentPage('home')} 
+                        onClick={() => goToPage('home')} 
                         style={{ cursor: 'pointer' }}
                     >
                         <span className="sidebar-link-icon"><LayoutDashboardIcon /></span>
@@ -505,7 +552,7 @@ const Dashboard = ({ setView, user }) => {
                     </a>
                     <a 
                         className={`sidebar-link ${currentPage === 'profile' ? 'active' : ''}`} 
-                        onClick={() => setCurrentPage('profile')} 
+                        onClick={() => goToPage('profile')} 
                         style={{ cursor: 'pointer' }}
                     >
                         <span className="sidebar-link-icon"><UserIcon /></span>
@@ -562,7 +609,7 @@ const Dashboard = ({ setView, user }) => {
                     )}
                     <a 
                         className={`sidebar-link ${currentPage === 'change-password' ? 'active' : ''}`} 
-                        onClick={() => setCurrentPage('change-password')} 
+                        onClick={() => goToPage('change-password')} 
                         style={{ cursor: 'pointer' }}
                     >
                         <span className="sidebar-link-icon"><ShieldIcon /></span>
@@ -596,7 +643,7 @@ const Dashboard = ({ setView, user }) => {
                             <div className={`dropdown-menu ${profileOpen ? 'show' : ''}`}>
                                 <a href="#" className="dropdown-item" onClick={(e) => { 
                                     e.preventDefault(); 
-                                    setCurrentPage('profile'); 
+                                    goToPage('profile'); 
                                     setProfileOpen(false); 
                                 }}>
                                     <UserIcon /> Profile
@@ -623,75 +670,71 @@ const Dashboard = ({ setView, user }) => {
                         </div>
                     )}
 
-                    {currentPage === 'home' && <DashboardHomePage onNavigate={(p) => setCurrentPage(p)} studentInfo={studentInfo} isLocked={isLocked} applications={applications} />}
-                    
-                    {currentPage === 'profile' && (
-                        <>
-                            <div className="page-header-minimal">
-                                <div className="breadcrumb-minimal">DASHBOARD &nbsp;&gt;&nbsp; USER MANAGEMENT &nbsp;&gt;&nbsp; {tabLabels[activeTab]}</div>
-                                <h1 className="page-title-minimal">Complete Profile</h1>
-                            </div>
-                            <div className="step-navigation">
-                                <div 
-                                    className={`step-item ${activeTab === 'personal' ? 'active' : ''} ${getTabStatus('personal') ? 'completed' : ''}`} 
-                                    onClick={() => navigateToTab('personal')}
-                                >
-                                    <div className="step-icon-wrapper"><UserIcon /></div>
-                                    <span className="step-label">Personal Details</span>
-                                    {getTabStatus('personal') && <span className="step-check">✓</span>}
-                                </div>
-                                <div className="step-connector"></div>
-                                <div 
-                                    className={`step-item ${activeTab === 'residence' ? 'active' : ''} ${getTabStatus('residence') ? 'completed' : ''} ${!canAccessTab(profileData, 'residence') ? 'disabled' : ''}`} 
-                                    onClick={() => navigateToTab('residence')}
-                                    style={{ cursor: canAccessTab(profileData, 'residence') ? 'pointer' : 'not-allowed', opacity: canAccessTab(profileData, 'residence') ? 1 : 0.5 }}
-                                >
-                                    <div className="step-icon-wrapper"><MapPinIcon /></div>
-                                    <span className="step-label">Address Details</span>
-                                    {getTabStatus('residence') && <span className="step-check">✓</span>}
-                                </div>
-                                <div className="step-connector"></div>
-                                <div 
-                                    className={`step-item ${activeTab === 'emergency' ? 'active' : ''} ${getTabStatus('emergency') ? 'completed' : ''} ${!canAccessTab(profileData, 'emergency') ? 'disabled' : ''}`} 
-                                    onClick={() => navigateToTab('emergency')}
-                                    style={{ cursor: canAccessTab(profileData, 'emergency') ? 'pointer' : 'not-allowed', opacity: canAccessTab(profileData, 'emergency') ? 1 : 0.5 }}
-                                >
-                                    <div className="step-icon-wrapper"><PhoneIcon /></div>
-                                    <span className="step-label">Emergency Contact</span>
-                                    {getTabStatus('emergency') && <span className="step-check">✓</span>}
-                                </div>
-                                <div className="step-connector"></div>
-                                <div 
-                                    className={`step-item ${activeTab === 'guardian' ? 'active' : ''} ${getTabStatus('guardian') ? 'completed' : ''} ${!canAccessTab(profileData, 'guardian') ? 'disabled' : ''}`} 
-                                    onClick={() => navigateToTab('guardian')}
-                                    style={{ cursor: canAccessTab(profileData, 'guardian') ? 'pointer' : 'not-allowed', opacity: canAccessTab(profileData, 'guardian') ? 1 : 0.5 }}
-                                >
-                                    <div className="step-icon-wrapper"><ShieldIcon /></div>
-                                    <span className="step-label">Guardian Details</span>
-                                    {getTabStatus('guardian') && <span className="step-check">✓</span>}
-                                </div>
-                            </div>
-                            {renderActiveTab()}
-                        </>
-                    )}
-                    
-                    {currentPage === 'personal-docs' && <PersonalDocumentsPage onDocumentChange={refreshDocuments} readOnly={isLocked} />}
-                    {currentPage === 'academic-info' && (
-                        <AcademicInformationPage 
-                            onAddClick={() => setCurrentPage('add-academic')} 
-                            onAcademicRecordChange={refreshAcademicRecords}
-                            readOnly={isLocked}
+                    <Routes>
+                        <Route
+                            index
+                            element={
+                                <DashboardHomePage
+                                    onNavigate={goToPage}
+                                    studentInfo={studentInfo}
+                                    isLocked={isLocked}
+                                    applications={applications}
+                                />
+                            }
                         />
-                    )}
-                    {currentPage === 'add-academic' && <AddAcademicInfoPage onCancel={() => setCurrentPage('academic-info')} />}
-                    {currentPage === 'application-list' && <AdmissionListingPage onCreateNew={() => setCurrentPage('application-form')} readOnly={isLocked} />}
-                    {currentPage === 'application-form' && (
-                        <AdmissionFormPage
-                            onCancel={() => setCurrentPage('application-list')}
-                            onSubmitted={refreshApplications}
+                        <Route
+                            path="profile"
+                            element={
+                                <ApplicantProfilePage
+                                    activeTab={activeTab}
+                                    navigateToTab={navigateToTab}
+                                    tabLabels={tabLabels}
+                                    getTabStatus={getTabStatus}
+                                    canAccessTab={canAccessTab}
+                                    profileData={profileData}
+                                    renderActiveTab={renderActiveTab}
+                                />
+                            }
                         />
-                    )}
-                    {currentPage === 'change-password' && <ChangePasswordPage />}
+                        <Route
+                            path="personal-docs"
+                            element={<PersonalDocumentsPage onDocumentChange={refreshDocuments} readOnly={isLocked} />}
+                        />
+                        <Route
+                            path="academic-info"
+                            element={
+                                <AcademicInformationPage
+                                    onAddClick={() => goToPage('add-academic')}
+                                    onAcademicRecordChange={refreshAcademicRecords}
+                                    readOnly={isLocked}
+                                />
+                            }
+                        />
+                        <Route
+                            path="add-academic"
+                            element={<AddAcademicInfoPage onCancel={() => goToPage('academic-info')} />}
+                        />
+                        <Route
+                            path="application-list"
+                            element={
+                                <AdmissionListingPage
+                                    onCreateNew={() => goToPage('application-form')}
+                                    readOnly={isLocked}
+                                />
+                            }
+                        />
+                        <Route
+                            path="application-form"
+                            element={
+                                <AdmissionFormPage
+                                    onCancel={() => goToPage('application-list')}
+                                    onSubmitted={refreshApplications}
+                                />
+                            }
+                        />
+                        <Route path="change-password" element={<ChangePasswordPage />} />
+                        <Route path="*" element={<Navigate to={APPLICANT_BASE} replace />} />
+                    </Routes>
                 </div>
 
                 <footer className="dashboard-footer">

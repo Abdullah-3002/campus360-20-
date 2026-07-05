@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.utils import timezone
-from .models import User, Role, LoginSession, PasswordReset, UserRole
+from .models import User, Role, LoginSession, PasswordReset, UserRole, AuditLog, Permission
 import uuid
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -82,11 +82,6 @@ class LoginSessionSerializer(serializers.ModelSerializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    
-    def validate_email(self, value):
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("No user found with this email")
-        return value
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     token = serializers.CharField()
@@ -107,3 +102,17 @@ class ChangePasswordSerializer(serializers.Serializer):
         if data['new_password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
         return data
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True, default='')
+
+    class Meta:
+        model = AuditLog
+        fields = '__all__'
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = '__all__'

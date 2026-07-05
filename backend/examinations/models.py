@@ -3,9 +3,17 @@ from django.conf import settings
 
 
 class ExamType(models.Model):
+    MARKS_PERIOD_CHOICES = [
+        ('pre_mid', 'Pre Mid (A1, A2, Q1)'),
+        ('mid_term', 'Mid Term'),
+        ('post_mid', 'Post Mid (A3, Q2)'),
+        ('final', 'Final Term'),
+    ]
+
     exam_type_id        = models.AutoField(primary_key=True)
     type_name           = models.CharField(max_length=50, unique=True)
     weightage_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    marks_period        = models.CharField(max_length=20, choices=MARKS_PERIOD_CHOICES, default='pre_mid')
     description         = models.TextField(blank=True)
 
     class Meta:
@@ -116,7 +124,7 @@ class FinalGrade(models.Model):
     registration        = models.OneToOneField(
         'enrollments.CourseRegistration', 
         on_delete=models.CASCADE, 
-        related_name='final_grades'
+        related_name='final_grade'
     )
     student             = models.ForeignKey('students.Student', on_delete=models.CASCADE, related_name='final_grades')
     course              = models.ForeignKey('academics.Course', on_delete=models.RESTRICT, related_name='final_grades')
@@ -178,11 +186,17 @@ class ResultApproval(models.Model):
 
 
 class MarksEditPermission(models.Model):
+    REQUEST_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
     permission_id = models.AutoField(primary_key=True)
     section = models.ForeignKey('sections.Section', on_delete=models.CASCADE, related_name='marks_edit_permissions')
     student = models.ForeignKey(
         'students.Student', on_delete=models.CASCADE,
-        null=True, blank=True, related_name='marks_edit_permissions',
+        related_name='marks_edit_permissions',
     )
     granted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.RESTRICT, related_name='granted_marks_permissions'
@@ -190,9 +204,17 @@ class MarksEditPermission(models.Model):
     granted_to = models.ForeignKey(
         'faculty.Faculty', on_delete=models.CASCADE, related_name='marks_edit_permissions'
     )
+    examination = models.ForeignKey(
+        'examinations.Examination', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='edit_permissions',
+        help_text='Specific exam this approval applies to',
+    )
+    request_status = models.CharField(max_length=20, choices=REQUEST_STATUS_CHOICES, default='pending')
     expires_at = models.DateTimeField()
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     reason = models.TextField(blank=True)
+    review_notes = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

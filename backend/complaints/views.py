@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from accounts.permissions import IsAdmin
+from accounts.access_helpers import can_view_complaint, can_use_complaint_thread
+from accounts.rbac import user_has_permission
 from .models import ComplaintCategory, Complaint, ComplaintAssignment, ComplaintLog, CommunicationThread, Message, Feedback
 from .serializers import (
     ComplaintCategorySerializer, ComplaintSerializer, ComplaintAssignmentSerializer,
@@ -31,6 +33,8 @@ def create_category(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_complaint(request):
+    if not user_has_permission(request.user, 'complaints.create_complaint'):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
     serializer = ComplaintSerializer(data=request.data)
     if serializer.is_valid():
         complaint = serializer.save(submitted_by=request.user)
@@ -40,6 +44,15 @@ def submit_complaint(request):
             performed_by=request.user,
             new_status='pending'
         )
+        thread, _ = CommunicationThread.objects.get_or_create(
+            complaint=complaint,
+            defaults={'subject': complaint.subject, 'created_by': request.user},
+        )
+        Message.objects.create(
+            thread=thread,
+            sender=request.user,
+            message_text=complaint.description,
+        )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -47,6 +60,8 @@ def submit_complaint(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_complaints(request):
+    if not user_has_permission(request.user, 'complaints.view_own_complaint'):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
     complaints = Complaint.objects.select_related('category').filter(submitted_by=request.user)
     return Response(ComplaintSerializer(complaints, many=True).data)
 
@@ -110,6 +125,8 @@ def complaint_detail(request, complaint_id):
         return Response({'error': 'Complaint not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'GET':
+        if not can_view_complaint(request.user, complaint):
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         return Response(ComplaintSerializer(complaint).data)
 
     if request.method == 'DELETE':
@@ -120,11 +137,18 @@ def complaint_detail(request, complaint_id):
         complaint.delete()
         return Response({'message': 'Complaint deleted successfully.'})
 
-    if complaint.submitted_by != request.user and request.user.user_type != 'admin':
+    if complaint.submitted_by != request.user and not user_has_permission(
+        request.user, 'complaints.manage_complaint'
+    ):
         return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
 
+    allowed_fields = {'description', 'subject', 'category'}
+    data = {k: v for k, v in request.data.items() if k in allowed_fields}
+    if not data:
+        return Response({'error': 'No editable fields provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
     old_status = complaint.status
-    serializer = ComplaintSerializer(complaint, data=request.data, partial=True)
+    serializer = ComplaintSerializer(complaint, data=data, partial=True)
     if serializer.is_valid():
         updated = serializer.save()
         if updated.status != old_status:
@@ -173,11 +197,18 @@ def complaint_thread(request, complaint_id):
         return Response({'error': 'Complaint not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'GET':
+        if not can_use_complaint_thread(request.user, complaint):
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         try:
-            thread = CommunicationThread.objects.prefetch_related('messages').get(complaint=complaint)
-            return Response(CommunicationThreadSerializer(thread).data)
+            thread = CommunicationThread.objects.prefetch_related('messages__sender').get(complaint=complaint)
         except CommunicationThread.DoesNotExist:
-            return Response({'error': 'No thread found.'}, status=status.HTTP_404_NOT_FOUND)
+            thread = CommunicationThread.objects.create(
+                complaint=complaint, subject=complaint.subject, created_by=complaint.submitted_by,
+            )
+        return Response(CommunicationThreadSerializer(thread).data)
+
+    if not can_use_complaint_thread(request.user, complaint):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
 
     thread, _ = CommunicationThread.objects.get_or_create(
         complaint=complaint,

@@ -1,5 +1,6 @@
 // src/pages/SignupPage.jsx
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { registerUser } from '../services/authService';
 import { UserIcon, CalendarIcon, MailIcon, LockIcon, EyeIcon, EyeOffIcon } from '../Icons';
 import PasswordValidation from '../components/PasswordValidation';
@@ -13,7 +14,8 @@ import {
     getPasswordError
 } from '../utils/validation';
 
-const SignupPage = ({ setView }) => {
+const SignupPage = () => {
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({ 
         firstName: '', lastName: '', gender: '', dob: '', cnic: '', phone: '', username: '', email: '', password: '', confirm: '' 
     });
@@ -109,7 +111,7 @@ const SignupPage = ({ setView }) => {
                 formData.confirm
             );
             alert('Account created! Please log in.');
-            setView('login');
+            navigate('/login');
         } catch (error) {
             if (error.response?.data?.email)
                 alert('This email is already registered.');
@@ -368,7 +370,7 @@ const SignupPage = ({ setView }) => {
 
                         <div className="bottom-text">
                             Already have an account?
-                            <button type="button" className="login-beautiful-btn" onClick={() => setView('login')}>
+                            <button type="button" className="login-beautiful-btn" onClick={() => navigate('/login')}>
                                 Sign In to Your Account
                             </button>
                         </div>

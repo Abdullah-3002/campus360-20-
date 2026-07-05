@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { listAttendance, listAttendanceSummaries } from '../../../services/attendanceService';
+import { BASE_URL, getAuthHeader } from '../../../services/api';
 import { normalizeList } from '../../../services/api';
 import { PageHeader, useTableFilter, TablePagination, LoadingSpinner, EmptyRow, formatDate, getStatusBadgeClass } from '../../shared/helpers';
 import { ClipboardIcon } from '../../Icons';
@@ -27,6 +28,17 @@ const AttendanceListingPage = () => {
 
     const currentData = activeTab === 'records' ? records : summaries;
     const { search, setSearch, page, setPage, paginated, filtered, totalPages, pageSize } = useTableFilter(currentData, ['student_reg', 'section_name']);
+    const exportReport = () => {
+        fetch(`${BASE_URL}/attendance/summary/export/`, getAuthHeader(token))
+            .then(r => r.blob())
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'attendance_report.csv';
+                a.click();
+            }).catch(() => alert('Export failed'));
+    };
 
     if (loading) return <LoadingSpinner message="Loading attendance..." />;
 
@@ -42,6 +54,9 @@ const AttendanceListingPage = () => {
                     <div className="table-search search-bar" style={{ maxWidth: 360 }}>
                         <input type="text" placeholder="Search..." className="search-input" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
                     </div>
+                    {activeTab === 'summary' && (
+                        <button className="btn-secondary" onClick={exportReport}>Export CSV</button>
+                    )}
                 </div>
                 <div className="data-table-wrapper">
                     {activeTab === 'records' ? (
@@ -72,9 +87,9 @@ const AttendanceListingPage = () => {
                                         <td>{(page - 1) * pageSize + i + 1}</td>
                                         <td>{item.student_reg || '—'}</td>
                                         <td>{item.section_name || '—'}</td>
-                                        <td>{item.present_count ?? '—'}</td>
-                                        <td>{item.absent_count ?? '—'}</td>
-                                        <td>{item.percentage != null ? `${item.percentage}%` : '—'}</td>
+                                        <td>{item.attended_lectures ?? '—'}</td>
+                                        <td>{(item.total_lectures || 0) - (item.attended_lectures || 0)}</td>
+                                        <td>{item.attendance_percentage != null ? `${Number(item.attendance_percentage).toFixed(1)}%` : '—'}</td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from accounts.permissions import IsAdmin, IsAdminOrTeacher
+from accounts.access_helpers import can_view_section_roster, user_is_admin
 from .models import Section, SectionSchedule, BatchSection
 from .serializers import SectionSerializer, SectionCreateSerializer, SectionScheduleSerializer, BatchSectionSerializer
 from enrollments.models import CourseRegistration
@@ -11,7 +12,9 @@ from enrollments.models import CourseRegistration
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_sections(request):
-    sections = Section.objects.select_related('course', 'semester', 'faculty__user').filter(is_active=True)
+    sections = Section.objects.select_related('course', 'semester', 'faculty__user')
+    if request.query_params.get('all') != '1':
+        sections = sections.filter(is_active=True)
     semester = request.query_params.get('semester')
     course   = request.query_params.get('course')
     faculty  = request.query_params.get('faculty')
@@ -46,15 +49,20 @@ def section_detail(request, section_id):
         return Response(SectionSerializer(section).data)
 
     if request.method == 'PUT':
+        if request.user.user_type != 'admin':
+            return Response({'error': 'Only admin can update sections.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = SectionCreateSerializer(section, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(SectionSerializer(section).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    section.is_active = False
-    section.save(update_fields=['is_active'])
-    return Response({'message': 'Section deactivated.'})
+    if request.method == 'DELETE':
+        if not user_is_admin(request.user):
+            return Response({'error': 'Only admin can deactivate sections.'}, status=status.HTTP_403_FORBIDDEN)
+        section.is_active = False
+        section.save(update_fields=['is_active'])
+        return Response({'message': 'Section deactivated.'})
 
 
 @api_view(['GET'])
@@ -139,6 +147,14 @@ def delete_batch_section(request, batch_section_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_section_students(request, section_id):
+    try:
+        section = Section.objects.select_related('faculty').get(section_id=section_id)
+    except Section.DoesNotExist:
+        return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not can_view_section_roster(request.user, section):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
     registrations = CourseRegistration.objects.filter(
         section_id=section_id,
         status='registered'
@@ -172,10 +188,9 @@ def submit_final_marks(request, section_id):
     grade_stats = _compute_section_final_grades(section)
 
     section.marks_locked = True
-    section.is_active = False
-    section.save(update_fields=['marks_locked', 'is_active'])
+    section.save(update_fields=['marks_locked'])
     return Response({
-        'message': 'Final marks submitted. Section is now locked and inactive.',
+        'message': 'Final marks submitted. Section marks are now locked.',
         'section_id': section_id,
         **grade_stats,
     })

@@ -6,6 +6,13 @@ import { normalizeList } from '../../../services/api';
 import { PageHeader, useTableFilter, TablePagination, LoadingSpinner, EmptyRow, useToast, getStatusBadgeClass } from '../../shared/helpers';
 import { UserIcon, XIcon, TrashIcon } from '../../Icons';
 
+const EMPLOYMENT_OPTIONS = [
+    { value: 'permanent', label: 'Permanent' },
+    { value: 'visiting', label: 'Visiting' },
+    { value: 'contract', label: 'Contract' },
+    { value: 'contractual', label: 'Contractual' },
+];
+
 const FacultyListingPage = () => {
     const { token } = useAuth();
     const { showToast, Toast } = useToast();
@@ -15,7 +22,9 @@ const FacultyListingPage = () => {
     const [loading, setLoading] = useState(true);
     const [selectedFaculty, setSelectedFaculty] = useState(null);
     const [detail, setDetail] = useState(null);
+    const [editForm, setEditForm] = useState({ office_floor: '', office_hours: '', employment_type: 'permanent' });
     const [detailLoading, setDetailLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -42,12 +51,37 @@ const FacultyListingPage = () => {
         try {
             const d = await getFaculty(item.faculty_id, token);
             setDetail(d);
+            setEditForm({
+                office_floor: d.office_floor || '',
+                office_hours: d.office_hours || '',
+                employment_type: d.employment_type || 'permanent',
+            });
         } catch (e) {
             showToast('Failed to load faculty details', 'error');
             setSelectedFaculty(null);
         } finally {
             setDetailLoading(false);
         }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!selectedFaculty) return;
+        setSaving(true);
+        try {
+            const updated = await updateFaculty(selectedFaculty.faculty_id, editForm, token);
+            setDetail(updated);
+            showToast('Faculty profile updated');
+            load();
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to update profile');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const closeModal = () => {
+        setSelectedFaculty(null);
+        setDetail(null);
     };
 
     const toggleStatus = async (item, e) => {
@@ -127,11 +161,11 @@ const FacultyListingPage = () => {
             </div>
 
             {selectedFaculty && (
-                <div className="modal-overlay" onClick={() => { setSelectedFaculty(null); setDetail(null); }}>
+                <div className="modal-overlay" onClick={closeModal}>
                     <div className="glass-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px', width: '95%' }}>
                         <div className="modal-header">
                             <h3>Faculty Profile — {selectedFaculty.employee_code}</h3>
-                            <button className="close-btn" onClick={() => { setSelectedFaculty(null); setDetail(null); }}><XIcon /></button>
+                            <button className="close-btn" onClick={closeModal}><XIcon /></button>
                         </div>
                         <div className="modal-body">
                             {detailLoading ? <LoadingSpinner message="Loading..." /> : detail ? (
@@ -144,6 +178,29 @@ const FacultyListingPage = () => {
                                     <p><strong>Qualification:</strong> {detail.qualification}</p>
                                     <p><strong>Specialization:</strong> {detail.specialization || '—'}</p>
                                     <p><strong>Status:</strong> {detail.status}</p>
+
+                                    <hr />
+                                    <h4 style={{ margin: '8px 0' }}>Office & Employment</h4>
+                                    <div className="field-group">
+                                        <label className="field-label">Employment Type</label>
+                                        <select className="field-input field-select" value={editForm.employment_type}
+                                            onChange={e => setEditForm({ ...editForm, employment_type: e.target.value })}>
+                                            {EMPLOYMENT_OPTIONS.map(o => (
+                                                <option key={o.value} value={o.value}>{o.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="field-group">
+                                        <label className="field-label">Office Floor</label>
+                                        <input className="field-input" value={editForm.office_floor}
+                                            onChange={e => setEditForm({ ...editForm, office_floor: e.target.value })} />
+                                    </div>
+                                    <div className="field-group">
+                                        <label className="field-label">Office Hours</label>
+                                        <input className="field-input" value={editForm.office_hours}
+                                            onChange={e => setEditForm({ ...editForm, office_hours: e.target.value })} />
+                                    </div>
+
                                     {detail.employee_profile && (<>
                                         <hr />
                                         <p><strong>CNIC:</strong> {detail.employee_profile.cnic || '—'}</p>
@@ -153,6 +210,12 @@ const FacultyListingPage = () => {
                                     </>)}
                                 </div>
                             ) : null}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn-secondary" onClick={closeModal}>Close</button>
+                            <button className="btn-primary" onClick={handleSaveProfile} disabled={saving || detailLoading}>
+                                {saving ? 'Saving...' : 'Save Changes'}
+                            </button>
                         </div>
                     </div>
                 </div>

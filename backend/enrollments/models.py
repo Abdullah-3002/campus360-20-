@@ -41,8 +41,6 @@ class CourseRegistration(models.Model):
     status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default='registered')
     dropped_date    = models.DateField(null=True, blank=True)
     drop_reason     = models.TextField(blank=True)
-    # final_grade will be linked here once the examinations app is built
-    # final_grade = models.OneToOneField('examinations.FinalGrade', null=True, blank=True, ...)
     grade_points    = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
     created_at      = models.DateTimeField(auto_now_add=True)
 

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { listAllComplaints, listActiveComplaints, listCategories, createCategory, adminUpdateComplaintStatus } from '../../../services/complaintsService';
+import {
+    listAllComplaints, listActiveComplaints, listCategories, createCategory,
+    adminUpdateComplaintStatus, getComplaintThread, postComplaintMessage,
+} from '../../../services/complaintsService';
 import { normalizeList } from '../../../services/api';
 import { PageHeader, useTableFilter, TablePagination, LoadingSpinner, EmptyRow, useToast, formatDate, getStatusBadgeClass } from '../../shared/helpers';
 import { PlusIcon, BellIcon, XIcon } from '../../Icons';
@@ -16,6 +19,10 @@ const ComplaintsListingPage = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedComplaint, setSelectedComplaint] = useState(null);
     const [statusForm, setStatusForm] = useState({ status: 'in_progress', admin_response: '' });
+    const [thread, setThread] = useState(null);
+    const [threadLoading, setThreadLoading] = useState(false);
+    const [newMessage, setNewMessage] = useState('');
+    const [sendingMessage, setSendingMessage] = useState(false);
     const [formData, setFormData] = useState({ category_name: '', description: '' });
     const [submitting, setSubmitting] = useState(false);
 
@@ -33,6 +40,45 @@ const ComplaintsListingPage = () => {
     };
 
     useEffect(() => { if (token) load(); }, [token, complaintTab]);
+
+    const loadThread = async (complaintId) => {
+        setThreadLoading(true);
+        try {
+            const data = await getComplaintThread(complaintId, token);
+            setThread(data);
+        } catch (e) {
+            showToast('Failed to load message thread', 'error');
+        } finally {
+            setThreadLoading(false);
+        }
+    };
+
+    const openComplaintReview = (item) => {
+        setSelectedComplaint(item);
+        setStatusForm({ status: 'in_progress', admin_response: '' });
+        setNewMessage('');
+        loadThread(item.complaint_id);
+    };
+
+    const closeComplaintReview = () => {
+        setSelectedComplaint(null);
+        setThread(null);
+        setNewMessage('');
+    };
+
+    const handleSendMessage = async () => {
+        if (!selectedComplaint || !newMessage.trim()) return;
+        setSendingMessage(true);
+        try {
+            await postComplaintMessage(selectedComplaint.complaint_id, { message_text: newMessage.trim() }, token);
+            setNewMessage('');
+            await loadThread(selectedComplaint.complaint_id);
+        } catch (e) {
+            alert(e.response?.data?.error || 'Failed to send message');
+        } finally {
+            setSendingMessage(false);
+        }
+    };
 
     const displayedComplaints = complaintTab === 'active'
         ? complaints.filter(c => c.status !== 'resolved')
@@ -62,8 +108,7 @@ const ComplaintsListingPage = () => {
         try {
             await adminUpdateComplaintStatus(selectedComplaint.complaint_id, statusForm, token);
             showToast('Complaint status updated');
-            setSelectedComplaint(null);
-            setStatusForm({ status: 'in_progress', admin_response: '' });
+            closeComplaintReview();
             load();
         } catch (e) {
             alert(e.response?.data?.error || 'Failed to update status');
@@ -108,7 +153,7 @@ const ComplaintsListingPage = () => {
                                         <td>{formatDate(item.submitted_at || item.created_at)}</td>
                                         <td><span className={getStatusBadgeClass(item.status)}>{item.status === 'in_progress' ? 'UNDER REVIEW' : item.status?.toUpperCase()}</span></td>
                                         <td>
-                                            <button className="action-btn view-btn" onClick={() => { setSelectedComplaint(item); setStatusForm({ status: 'in_progress', admin_response: '' }); }}>Review</button>
+                                            <button className="action-btn view-btn" onClick={() => openComplaintReview(item)}>Review</button>
                                         </td>
                                     </tr>
                                 ))}
@@ -136,28 +181,63 @@ const ComplaintsListingPage = () => {
 
             {selectedComplaint && (
                 <div className="modal-overlay">
-                    <div className="glass-modal">
-                        <div className="modal-header"><h3>{selectedComplaint.subject}</h3><button className="close-btn" onClick={() => setSelectedComplaint(null)}><XIcon /></button></div>
-                        <div className="modal-body">
-                            <p><strong>From:</strong> {selectedComplaint.submitted_by_username || 'Student'}</p>
-                            <p style={{ marginTop: '12px' }}>{selectedComplaint.description}</p>
-                            <div className="field-group" style={{ marginTop: '16px' }}>
-                                <label className="field-label">Status</label>
-                                <select className="field-input field-select" value={statusForm.status} onChange={e => setStatusForm({ ...statusForm, status: e.target.value })}>
-                                    <option value="in_progress">Under Review</option>
-                                    <option value="resolved">Resolved</option>
-                                </select>
-                            </div>
-                            {statusForm.status === 'resolved' && (
-                                <div className="field-group">
-                                    <label className="field-label">Response Message <span className="required">*</span></label>
-                                    <textarea className="field-input field-textarea" value={statusForm.admin_response} onChange={e => setStatusForm({ ...statusForm, admin_response: e.target.value })} />
+                    <div className="glass-modal" style={{ maxWidth: '900px', width: '95%' }}>
+                        <div className="modal-header"><h3>{selectedComplaint.subject}</h3><button className="close-btn" onClick={closeComplaintReview}><XIcon /></button></div>
+                        <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                            <div>
+                                <p><strong>From:</strong> {selectedComplaint.submitted_by_username || 'Student'}</p>
+                                <p style={{ marginTop: '12px' }}>{selectedComplaint.description}</p>
+                                <div className="field-group" style={{ marginTop: '16px' }}>
+                                    <label className="field-label">Status</label>
+                                    <select className="field-input field-select" value={statusForm.status} onChange={e => setStatusForm({ ...statusForm, status: e.target.value })}>
+                                        <option value="in_progress">Under Review</option>
+                                        <option value="resolved">Resolved</option>
+                                    </select>
                                 </div>
-                            )}
+                                {statusForm.status === 'resolved' && (
+                                    <div className="field-group">
+                                        <label className="field-label">Response Message <span className="required">*</span></label>
+                                        <textarea className="field-input field-textarea" value={statusForm.admin_response} onChange={e => setStatusForm({ ...statusForm, admin_response: e.target.value })} />
+                                    </div>
+                                )}
+                                <button className="btn-primary" style={{ marginTop: '12px' }} onClick={handleStatusUpdate}>Update Status</button>
+                            </div>
+
+                            <div style={{ borderLeft: '1px solid var(--border-medium)', paddingLeft: '20px' }}>
+                                <h4 style={{ marginBottom: '12px' }}>Message Thread</h4>
+                                <div style={{ maxHeight: '280px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {threadLoading ? (
+                                        <LoadingSpinner message="Loading thread..." />
+                                    ) : (thread?.messages || []).length === 0 ? (
+                                        <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>No messages yet.</p>
+                                    ) : (
+                                        (thread?.messages || []).map(msg => (
+                                            <div key={msg.message_id} style={{
+                                                padding: '10px 12px', borderRadius: '8px',
+                                                background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)',
+                                            }}>
+                                                <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>
+                                                    {msg.sender_username || 'User'}
+                                                    <span style={{ fontWeight: 400, marginLeft: '8px', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                                        {formatDate(msg.sent_at)}
+                                                    </span>
+                                                </div>
+                                                <div>{msg.message_text}</div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                                <div className="field-group">
+                                    <label className="field-label">Reply</label>
+                                    <textarea className="field-input field-textarea" rows={3} value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Write a message..." />
+                                </div>
+                                <button className="btn-secondary" onClick={handleSendMessage} disabled={sendingMessage || !newMessage.trim()}>
+                                    {sendingMessage ? 'Sending...' : 'Send Message'}
+                                </button>
+                            </div>
                         </div>
                         <div className="modal-footer">
-                            <button className="btn-secondary" onClick={() => setSelectedComplaint(null)}>Cancel</button>
-                            <button className="btn-primary" onClick={handleStatusUpdate}>Update Status</button>
+                            <button className="btn-secondary" onClick={closeComplaintReview}>Close</button>
                         </div>
                     </div>
                 </div>

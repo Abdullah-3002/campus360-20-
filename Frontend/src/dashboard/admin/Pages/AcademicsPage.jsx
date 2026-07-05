@@ -23,8 +23,21 @@ const AcademicsPage = () => {
     const [editItem, setEditItem] = useState(null);
     const [formData, setFormData] = useState({});
     const [submitting, setSubmitting] = useState(false);
-    const [pcDept, setPcDept] = useState('');
-    const [pcPrograms, setPcPrograms] = useState([]);
+
+    const parseIntField = (val, fallback = 0) => {
+        const n = parseInt(val, 10);
+        return Number.isFinite(n) ? n : fallback;
+    };
+
+    const apiError = (e) => {
+        const d = e.response?.data;
+        if (!d) return 'Request failed';
+        if (typeof d.error === 'string') return d.error;
+        const first = Object.values(d)[0];
+        return Array.isArray(first) ? first[0] : String(first);
+    };
+
+    const selectedProgramObj = programs.find(p => String(p.program_id) === String(selectedProgram));
 
     const loadBase = async () => {
         if (!token) return;
@@ -51,11 +64,6 @@ const AcademicsPage = () => {
     };
 
     useEffect(() => { loadProgramCourses(); }, [token, selectedProgram, selectedSemester]);
-
-    useEffect(() => {
-        if (!token || !pcDept) { setPcPrograms([]); return; }
-        listPrograms(token, pcDept).then(d => setPcPrograms(normalizeList(d))).catch(console.error);
-    }, [token, pcDept]);
 
     const getCurrentData = () => {
         if (activeTab === 'departments') return departments;
@@ -84,9 +92,9 @@ const AcademicsPage = () => {
             });
         } else {
             setFormData({
-                department: pcDept || '', program: selectedProgram || '', semester_number: parseInt(selectedSemester, 10) || 1,
                 course_code: '', course_name: '', course_type: 'core',
                 credit_hours: 3, theory_credit_hours: 3, lab_credit_hours: 0,
+                prerequisite_codes: '',
             });
         }
         setShowModal(true);
@@ -118,14 +126,32 @@ const AcademicsPage = () => {
                 if (editItem) await updateProgram(editItem.program_id, payload, token);
                 else await createProgram(payload, token);
             } else {
-                await addProgramCourse(formData, token);
+                if (!selectedProgram) {
+                    alert('Select a program from the filter above first.');
+                    return;
+                }
+                const prog = programs.find(p => String(p.program_id) === String(selectedProgram));
+                const payload = {
+                    program: parseIntField(selectedProgram),
+                    semester_number: parseIntField(selectedSemester, 1),
+                    department: prog?.department ?? prog?.department_id,
+                    course_code: (formData.course_code || '').trim(),
+                    course_name: (formData.course_name || '').trim(),
+                    course_type: formData.course_type || 'core',
+                    credit_hours: parseIntField(formData.credit_hours, 3),
+                    theory_credit_hours: parseIntField(formData.theory_credit_hours, 0),
+                    lab_credit_hours: parseIntField(formData.lab_credit_hours, 0),
+                    prerequisite_codes: (formData.prerequisite_codes || '')
+                        .split(',').map(s => s.trim()).filter(Boolean),
+                };
+                await addProgramCourse(payload, token);
             }
             showToast(editItem ? 'Updated successfully' : 'Created successfully');
             setShowModal(false);
             loadBase();
             if (activeTab === 'program-courses') loadProgramCourses();
         } catch (e) {
-            alert(e.response?.data?.error || Object.values(e.response?.data || {})[0] || 'Failed to save');
+            alert(apiError(e));
         } finally {
             setSubmitting(false);
         }
@@ -140,8 +166,16 @@ const AcademicsPage = () => {
             showToast('Deleted successfully');
             loadBase();
         } catch (e) {
-            alert(e.response?.data?.error || 'Delete failed');
+            alert(apiError(e));
         }
+    };
+
+    const openCreateProgramCourse = () => {
+        if (!selectedProgram) {
+            alert('Select a program from the filter above first.');
+            return;
+        }
+        openCreate();
     };
 
     const renderRow = (item, index) => {
@@ -175,6 +209,7 @@ const AcademicsPage = () => {
                 <td>{sr}</td><td>{item.course_code}</td><td>{item.course_name}</td>
                 <td>{item.semester_number}</td><td>{item.course_type}</td>
                 <td>{item.credit_hours}</td><td>{item.theory_credit_hours}</td><td>{item.lab_credit_hours}</td>
+                <td>{(item.prerequisites || []).join(', ') || '—'}</td>
                 <td>
                     <button className="action-btn danger" onClick={async () => {
                         if (confirm('Remove this course from program?')) {
@@ -191,7 +226,7 @@ const AcademicsPage = () => {
     const headers = {
         departments: ['Sr#', 'Code', 'Name', 'Actions'],
         programs: ['Sr#', 'Code', 'Name', 'Duration', 'Semesters', 'Credit Hrs', 'Fee/Sem', 'Degree', 'Actions'],
-        'program-courses': ['Sr#', 'Code', 'Name', 'Semester', 'Type', 'Credits', 'Theory', 'Lab', 'Action'],
+        'program-courses': ['Sr#', 'Code', 'Name', 'Semester', 'Type', 'Credits', 'Theory', 'Lab', 'Prerequisites', 'Action'],
     };
 
     if (loading) return <LoadingSpinner message="Loading academics..." />;
@@ -236,9 +271,11 @@ const AcademicsPage = () => {
                         <input type="text" placeholder="Search..." className="search-input" value={search}
                             onChange={e => { setSearch(e.target.value); setPage(1); }} />
                     </div>
-                    {(activeTab !== 'program-courses' || (selectedProgram && selectedSemester)) && activeTab !== 'program-courses' || selectedProgram ? (
-                        <button className="btn-add" onClick={openCreate}><PlusIcon /> <span>Add New</span></button>
-                    ) : null}
+                    {(activeTab !== 'program-courses' || selectedProgram) && (
+                        <button className="btn-add" onClick={activeTab === 'program-courses' ? openCreateProgramCourse : openCreate}>
+                            <PlusIcon /> <span>Add New</span>
+                        </button>
+                    )}
                 </div>
                 <div className="data-table-wrapper">
                     <table className="data-table">
@@ -254,13 +291,14 @@ const AcademicsPage = () => {
             </div>
 
             {showModal && (
-                <div className="modal-overlay">
-                    <div className="glass-modal">
+                <div className="modal-overlay" onClick={() => setShowModal(false)}>
+                    <div className="glass-modal" onClick={e => e.stopPropagation()}
+                        style={{ maxWidth: '520px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
                         <div className="modal-header">
                             <h3>{editItem ? 'Edit' : 'Add'} {activeTab === 'program-courses' ? 'Course' : activeTab.slice(0, -1)}</h3>
                             <button className="close-btn" onClick={() => setShowModal(false)}><XIcon /></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
                             {activeTab === 'departments' && (<>
                                 <div className="field-group"><label className="field-label">Department Name</label>
                                     <input className="field-input" value={formData.department_name || ''} onChange={e => setFormData({ ...formData, department_name: e.target.value })} /></div>
@@ -289,32 +327,32 @@ const AcademicsPage = () => {
                                     <input type="number" className="field-input" value={formData.fee_per_semester || ''} onChange={e => setFormData({ ...formData, fee_per_semester: e.target.value })} /></div>
                             </>)}
                             {activeTab === 'program-courses' && (<>
-                                <div className="field-group"><label className="field-label">Department</label>
-                                    <select className="field-input field-select" value={formData.department || pcDept} onChange={e => { setPcDept(e.target.value); setFormData({ ...formData, department: e.target.value, program: '' }); }}>
-                                        <option value="">Select department</option>
-                                        {departments.map(d => <option key={d.department_id} value={d.department_id}>{d.department_name}</option>)}
-                                    </select></div>
-                                <div className="field-group"><label className="field-label">Program</label>
-                                    <select className="field-input field-select" value={formData.program || selectedProgram} onChange={e => setFormData({ ...formData, program: e.target.value })}>
-                                        <option value="">Select program</option>
-                                        {pcPrograms.map(p => <option key={p.program_id} value={p.program_id}>{p.program_name}</option>)}
-                                    </select></div>
+                                {selectedProgramObj && (
+                                    <p style={{ margin: '0 0 12px', fontSize: '0.9rem', opacity: 0.85 }}>
+                                        Adding to <strong>{selectedProgramObj.program_name}</strong>, Semester {selectedSemester}
+                                    </p>
+                                )}
                                 <div className="field-group"><label className="field-label">Course Code</label>
                                     <input className="field-input" value={formData.course_code || ''} onChange={e => setFormData({ ...formData, course_code: e.target.value })} /></div>
                                 <div className="field-group"><label className="field-label">Course Name</label>
                                     <input className="field-input" value={formData.course_name || ''} onChange={e => setFormData({ ...formData, course_name: e.target.value })} /></div>
-                                <div className="field-group"><label className="field-label">Semester</label>
-                                    <input type="number" min="1" max="8" className="field-input" value={formData.semester_number || selectedSemester} onChange={e => setFormData({ ...formData, semester_number: parseInt(e.target.value, 10) })} /></div>
                                 <div className="field-group"><label className="field-label">Type</label>
                                     <select className="field-input field-select" value={formData.course_type || 'core'} onChange={e => setFormData({ ...formData, course_type: e.target.value })}>
                                         <option value="core">Core</option><option value="elective">Elective</option>
                                     </select></div>
                                 <div className="field-group"><label className="field-label">Credit Hours</label>
-                                    <input type="number" className="field-input" value={formData.credit_hours || 3} onChange={e => setFormData({ ...formData, credit_hours: parseInt(e.target.value, 10) })} /></div>
+                                    <input type="number" min="1" className="field-input" value={formData.credit_hours ?? 3}
+                                        onChange={e => setFormData({ ...formData, credit_hours: e.target.value })} /></div>
                                 <div className="field-group"><label className="field-label">Theory Credit Hours</label>
-                                    <input type="number" className="field-input" value={formData.theory_credit_hours ?? 3} onChange={e => setFormData({ ...formData, theory_credit_hours: parseInt(e.target.value, 10) })} /></div>
+                                    <input type="number" min="0" className="field-input" value={formData.theory_credit_hours ?? 3}
+                                        onChange={e => setFormData({ ...formData, theory_credit_hours: e.target.value })} /></div>
                                 <div className="field-group"><label className="field-label">Lab Credit Hours</label>
-                                    <input type="number" className="field-input" value={formData.lab_credit_hours ?? 0} onChange={e => setFormData({ ...formData, lab_credit_hours: parseInt(e.target.value, 10) })} /></div>
+                                    <input type="number" min="0" className="field-input" value={formData.lab_credit_hours ?? 0}
+                                        onChange={e => setFormData({ ...formData, lab_credit_hours: e.target.value })} /></div>
+                                <div className="field-group"><label className="field-label">Prerequisites (comma-separated codes)</label>
+                                    <input className="field-input" placeholder="e.g. CS101, MTH101 or 90+ CH"
+                                        value={formData.prerequisite_codes || ''}
+                                        onChange={e => setFormData({ ...formData, prerequisite_codes: e.target.value })} /></div>
                             </>)}
                         </div>
                         <div className="modal-footer">

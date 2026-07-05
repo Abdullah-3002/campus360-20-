@@ -14,7 +14,7 @@ import { myComplaints } from '../../services/complaintsService';
 
 import { listNotifications } from '../../services/notificationsService';
 
-import { getMyStudentProfile } from '../../services/studentsService';
+import { getMyStudentProfile, myDegreeProgress } from '../../services/studentsService';
 
 import { normalizeList } from '../../services/api';
 
@@ -41,6 +41,7 @@ const StudentDashboardHomePage = ({ onNavigate }) => {
     const [stats, setStats] = useState([]);
 
     const [studentInfo, setStudentInfo] = useState(null);
+    const [degreeProgress, setDegreeProgress] = useState(null);
 
 
 
@@ -54,13 +55,13 @@ const StudentDashboardHomePage = ({ onNavigate }) => {
 
             try {
 
-                const [enr, grades, att, challans, complaints, notifs, profile] = await Promise.allSettled([
+                const [enr, grades, att, challans, complaints, notifs, profile, progress] = await Promise.allSettled([
 
                     myEnrollments(token), myFinalGrades(token), myAttendanceSummary(token),
 
                     myChallans(token), myComplaints(token), listNotifications(token),
 
-                    getMyStudentProfile(token),
+                    getMyStudentProfile(token), myDegreeProgress(token),
 
                 ]);
 
@@ -73,6 +74,7 @@ const StudentDashboardHomePage = ({ onNavigate }) => {
                 const attData = att.status === 'fulfilled' ? att.value : {};
 
                 if (profile.status === 'fulfilled') setStudentInfo(profile.value);
+                if (progress.status === 'fulfilled') setDegreeProgress(progress.value);
 
                 setStats([
 
@@ -127,6 +129,10 @@ const StudentDashboardHomePage = ({ onNavigate }) => {
                             <span><strong>Reg No:</strong> {studentInfo.registration_number}</span>
 
                             <span><strong>Batch:</strong> {studentInfo.batch_year}</span>
+
+                            {degreeProgress && (
+                                <span><strong>Degree Progress:</strong> {degreeProgress.degree_completion_percent}% ({degreeProgress.earned_credit_hours}/{degreeProgress.total_credit_hours} CH)</span>
+                            )}
 
                         </div>
 

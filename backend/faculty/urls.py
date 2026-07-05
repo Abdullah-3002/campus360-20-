@@ -10,10 +10,6 @@ urlpatterns = [
     path('me/', views.get_my_faculty_profile, name='my-faculty-profile'),
     path('<int:faculty_id>/', views.faculty_detail, name='faculty-detail'),
 
-    path('staff/', views.list_staff, name='list-staff'),
-    path('staff/create/', views.create_staff, name='create-staff'),
-    path('staff/<int:staff_id>/', views.staff_detail, name='staff-detail'),
-
     path('profile/', views.employee_profile, name='employee-profile'),
     path('onboarding/complete/', views.complete_teacher_onboarding, name='complete-teacher-onboarding'),
 ]

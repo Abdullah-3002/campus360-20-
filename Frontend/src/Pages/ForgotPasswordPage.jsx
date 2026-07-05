@@ -1,5 +1,7 @@
 // src/pages/ForgotPasswordPage.jsx
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { requestPasswordReset } from '../services/authService';
 
 const MailIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -8,13 +10,33 @@ const MailIcon = () => (
     </svg>
 );
 
-const ForgotPasswordPage = ({ setView }) => {
+const ForgotPasswordPage = () => {
+    const navigate = useNavigate();
     const [email, setEmail] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
 
-    const handleReset = (e) => {
+    const handleReset = async (e) => {
         e.preventDefault();
-        if (!email) return alert("Please enter your email.");
-        alert("Password reset link has been sent to your email!");
+        if (!email) {
+            setError('Please enter your email.');
+            return;
+        }
+        setLoading(true);
+        setError('');
+        setMessage('');
+        try {
+            const data = await requestPasswordReset(email);
+            setMessage(data.message || 'If an account exists for this email, a reset link has been sent.');
+            if (data.reset_link) {
+                setMessage(`${data.message || 'Reset link generated.'} (Dev: ${data.reset_link})`);
+            }
+        } catch (err) {
+            setError(err.response?.data?.email?.[0] || err.response?.data?.error || 'Unable to process request.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -31,30 +53,36 @@ const ForgotPasswordPage = ({ setView }) => {
                         <div className="orbit-branding">Campus 360</div>
                         <h2 style={{ marginTop: '20px' }}>Reset Your Password</h2>
                         <p className="subtitle">Enter your email and we'll send you a link to reset your password.</p>
-                        
+
                         <form onSubmit={handleReset}>
                             <div className="form-group" style={{ marginBottom: '25px' }}>
                                 <label style={{ fontSize: '0.9rem', color: 'var(--dark-gray)', marginBottom: '5px', display: 'block' }}>Email Address</label>
                                 <div className="input-wrapper">
                                     <div className="input-icon"><MailIcon /></div>
-                                    <input 
-                                        type="email" 
-                                        className="form-input-with-icon" 
-                                        placeholder="yourname@campus.edu" 
-                                        required 
+                                    <input
+                                        type="email"
+                                        className="form-input-with-icon"
+                                        placeholder="yourname@campus.edu"
+                                        required
+                                        value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                     />
                                 </div>
                             </div>
-                            
-                            <button type="submit" className="login-btn-full">SEND RESET LINK</button>
+
+                            {error && <p style={{ color: '#ef4444', marginBottom: '12px', fontSize: '0.9rem' }}>{error}</p>}
+                            {message && <p style={{ color: '#16a34a', marginBottom: '12px', fontSize: '0.9rem' }}>{message}</p>}
+
+                            <button type="submit" className="login-btn-full" disabled={loading}>
+                                {loading ? 'Sending...' : 'SEND RESET LINK'}
+                            </button>
                         </form>
 
                         <div className="register-link">
-                            Don't have an account? <a href="#" onClick={(e) => { e.preventDefault(); setView('signup'); }}>Register Now</a>
+                            Don't have an account? <a href="#" onClick={(e) => { e.preventDefault(); navigate('/signup'); }}>Register Now</a>
                         </div>
-                        
-                        <button onClick={() => setView('login')} style={{ width: '100%', background: 'transparent', border: 'none', color: '#9ca3af', marginTop: '20px', cursor: 'pointer', fontSize: '0.9rem' }}>
+
+                        <button onClick={() => navigate('/login')} style={{ width: '100%', background: 'transparent', border: 'none', color: '#9ca3af', marginTop: '20px', cursor: 'pointer', fontSize: '0.9rem' }}>
                             ← Back to Login
                         </button>
                     </div>

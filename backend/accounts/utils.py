@@ -5,12 +5,13 @@ from django.conf import settings
 from django.utils import timezone
 from .models import LoginSession, PasswordReset 
 
-def generate_jwt_token(user):
-    """Generate JWT token for authenticated user"""
+def generate_jwt_token(user, session_token: str):
+    """Generate JWT token bound to an active login session."""
     payload = {
         'user_id': user.user_id,
         'email': user.email,
         'user_type': user.user_type,
+        'sid': session_token,
         'exp': datetime.utcnow() + timedelta(hours=24),
         'iat': datetime.utcnow(),
     }

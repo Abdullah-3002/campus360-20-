@@ -10,6 +10,9 @@ urlpatterns = [
     path('challans/me/', views.my_challans, name='my-challans'),
 
     path('payments/record/', views.record_payment, name='record-payment'),
+    path('payments/', views.list_payments, name='list-payments'),
+    path('payments/<int:payment_id>/verify/', views.verify_payment, name='verify-payment'),
+    path('challans/generate-bulk/', views.generate_semester_challans, name='generate-semester-challans'),
 
     path('scholarships/', views.scholarships, name='scholarships'),
 ]

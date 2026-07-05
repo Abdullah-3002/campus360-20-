@@ -81,12 +81,9 @@ def list_announcements(request):
             Q(target_audience='teachers') |
             Q(created_by=request.user)
         )
-    elif user_type == 'staff':
-        qs = qs.filter(
-            Q(target_audience='all') |
-            Q(target_audience='staff')
-        )
-    # Admin sees all announcements
+    # Admin sees all; filter own for admin dashboard optional
+    if user_type == 'admin' and request.query_params.get('mine') == '1':
+        qs = qs.filter(created_by=request.user)
 
     return Response(AnnouncementSerializer(qs.order_by('-created_at'), many=True).data)
 
@@ -107,6 +104,25 @@ def create_announcement(request):
                 {'error': 'Teachers can only create academic or general announcements.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        from faculty.models import Faculty
+        from sections.models import Section
+        from academics.models import ProgramCourse
+        try:
+            faculty = Faculty.objects.get(user=request.user)
+        except Faculty.DoesNotExist:
+            return Response({'error': 'Faculty profile required.'}, status=status.HTTP_403_FORBIDDEN)
+        taught_course_ids = Section.objects.filter(faculty=faculty, is_active=True).values_list('course_id', flat=True)
+        allowed_program_ids = set(
+            ProgramCourse.objects.filter(course_id__in=taught_course_ids).values_list('program_id', flat=True).distinct()
+        )
+        target_opt = data.get('target_audience_option') or data.get('target_audience') or 'students'
+        if target_opt.startswith('program_'):
+            prog_id = int(target_opt.split('_')[1])
+            if prog_id not in allowed_program_ids:
+                return Response(
+                    {'error': 'You can only announce to programs linked to your assigned courses.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         data['target_audience'] = data.get('target_audience') or 'students'
     
     # Map context to content if sent
@@ -206,7 +222,6 @@ def get_announcement_target_options(request):
         {'value': 'all', 'label': 'All'},
         {'value': 'students', 'label': 'All Students'},
         {'value': 'faculty', 'label': 'Teachers'},
-        {'value': 'staff', 'label': 'Staff'},
     ]
     
     for b in sorted(batches):

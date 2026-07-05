@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const BASE_URL = 'http://localhost:8000/api';
+import { BASE_URL } from './api';
 
 export const loginUser = async (email, password) => {
     const response = await axios.post(`${BASE_URL}/auth/login/`, {
@@ -16,7 +15,6 @@ export const registerUser = async (username, email, password, confirmPassword) =
         email: email,
         password: password,
         confirm_password: confirmPassword,
-        user_type: 'student'
     });
     return response.data;
 };
@@ -27,6 +25,28 @@ export const getCurrentUser = async (token) => {
             Authorization: `Bearer ${token}`
         }
     });
+    return response.data;
+};
+
+export const logoutUser = async (token) => {
+    const response = await axios.post(`${BASE_URL}/auth/logout/`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+};
+
+export const changePassword = async (oldPassword, newPassword, token) => {
+    const response = await axios.post(`${BASE_URL}/auth/change-password/`, {
+        old_password: oldPassword,
+        new_password: newPassword,
+    }, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+};
+
+export const requestPasswordReset = async (email) => {
+    const response = await axios.post(`${BASE_URL}/auth/password-reset/request/`, { email });
     return response.data;
 };
 

@@ -13,5 +13,3 @@ export const updateFaculty = (id, data, token) => apiPut(`${BASE}/${id}/`, data,
 export const deleteFaculty = (id, token) => apiDelete(`${BASE}/${id}/`, token);
 export const getMyFacultyProfile = (token) => apiGet(`${BASE}/me/`, token);
 export const completeTeacherOnboarding = (data, token) => apiPost(`${BASE}/onboarding/complete/`, data, token);
-
-export const listStaff = (token) => apiGet(`${BASE}/staff/`, token);

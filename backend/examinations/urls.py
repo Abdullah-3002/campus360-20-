@@ -11,7 +11,9 @@ urlpatterns = [
     path('', views.list_examinations, name='list-examinations'),
     path('create/', views.create_examination, name='create-examination'),
     path('<int:exam_id>/', views.examination_detail, name='examination-detail'),
+    path('<int:exam_id>/schedules/', views.list_exam_schedules, name='list-exam-schedules'),
     path('<int:exam_id>/schedule/', views.add_exam_schedule, name='add-exam-schedule'),
+    path('marks-lock-status/', views.marks_lock_status, name='marks-lock-status'),
     path('<int:exam_id>/marks/', views.list_marks, name='list-marks'),
     path('<int:exam_id>/marks/enter/', views.enter_marks, name='enter-marks'),
 
@@ -22,9 +24,13 @@ urlpatterns = [
 
     path('results/me/', views.my_results, name='my-results'),
     path('results/', views.list_results, name='list-results'),
+    path('results/generate/', views.generate_semester_results, name='generate-semester-results'),
     path('results/create/', views.create_result, name='create-result'),
     path('results/<int:result_id>/publish/', views.publish_result, name='publish-result'),
     path('results/<int:result_id>/approve/', views.approve_result, name='approve-result'),
     path('sections/<int:section_id>/compute-grades/', views.compute_section_grades, name='compute-section-grades'),
     path('sections/<int:section_id>/unlock-marks/', views.unlock_section_marks, name='unlock-section-marks'),
+    path('marks-edit-requests/', views.list_marks_edit_requests, name='list-marks-edit-requests'),
+    path('marks-edit-requests/create/', views.request_marks_edit, name='request-marks-edit'),
+    path('marks-edit-requests/<int:permission_id>/review/', views.review_marks_edit_request, name='review-marks-edit'),
 ]

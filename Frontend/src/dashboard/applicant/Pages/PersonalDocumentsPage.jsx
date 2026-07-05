@@ -1,11 +1,13 @@
 // src/dashboard/Pages/PersonalDocumentsPage.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { getApplicantProfile, getMyDocuments, uploadDocument, deleteDocument } from '../../../services/admissionService';
 import { InfoIcon, FileIcon, UploadIcon, XIcon, TrashIcon, CheckIcon } from '../../Icons';
 import { getDocumentUploadError, isValidDocumentUpload } from '../../../utils/validation';
 
 const PersonalDocumentsPage = ({ onDocumentChange, readOnly = false }) => {
+    const navigate = useNavigate();
     const { token } = useAuth();
     const [documents, setDocuments] = useState([]);
     const [dragActive, setDragActive] = useState(false);
@@ -195,7 +197,7 @@ const PersonalDocumentsPage = ({ onDocumentChange, readOnly = false }) => {
                     <p style={{ marginTop: '10px', color: '#64748b' }}>
                         Please complete your Personal Details before uploading documents.
                     </p>
-                    <button className="btn-primary" onClick={() => window.location.href = '#profile'} style={{ marginTop: '20px' }}>
+                    <button className="btn-primary" onClick={() => navigate('/applicant/profile')} style={{ marginTop: '20px' }}>
                         Go to Complete Profile
                     </button>
                 </div>

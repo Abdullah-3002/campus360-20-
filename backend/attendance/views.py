@@ -4,7 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Max
-from accounts.permissions import IsAdmin, IsAdminOrTeacher
+from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import require_permission, require_any_permission
 from students.models import Student
 from sections.models import Section
 from enrollments.models import CourseRegistration
@@ -12,11 +13,7 @@ from .models import Attendance, AttendanceRecord, StudentAttendanceSummary, Leav
 from .serializers import AttendanceSerializer, AttendanceRecordSerializer, StudentAttendanceSummarySerializer, LeaveApplicationSerializer
 
 
-def _get_faculty(user):
-    try:
-        return user.faculty_profile
-    except Exception:
-        return None
+from accounts.access_helpers import get_faculty_profile, teacher_owns_section, user_is_admin
 
 
 def _next_lecture_number(section_id):
@@ -33,38 +30,25 @@ def _update_summary(record):
         course=record.attendance.section.course,
         semester=record.attendance.section.semester,
     )
-    ch = getattr(record.attendance.section.course, 'credit_hours', 3)
-    if ch == 3:
-        summary.total_lectures = 32
-    elif ch == 1:
-        summary.total_lectures = 16
-    elif ch == 2:
-        summary.total_lectures = 24
-    elif ch == 4:
-        summary.total_lectures = 40
-    else:
-        summary.total_lectures = ch * 10
-
-    conducted_lectures = AttendanceRecord.objects.filter(
-        student=record.student,
-        attendance__section=record.attendance.section
-    ).count()
+    section = record.attendance.section
+    conducted_lectures = Attendance.objects.filter(section=section).count()
+    summary.total_lectures = max(conducted_lectures, 1)
 
     summary.attended_lectures = AttendanceRecord.objects.filter(
         student=record.student,
-        attendance__section=record.attendance.section,
+        attendance__section=section,
         status='present'
     ).count()
 
     summary.late_count = AttendanceRecord.objects.filter(
         student=record.student,
-        attendance__section=record.attendance.section,
+        attendance__section=section,
         status='late'
     ).count()
 
     summary.leave_count = AttendanceRecord.objects.filter(
         student=record.student,
-        attendance__section=record.attendance.section,
+        attendance__section=section,
         status='leave'
     ).count()
 
@@ -78,9 +62,9 @@ def _update_summary(record):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminOrTeacher])
+@permission_classes([IsAuthenticated, require_permission('attendance.mark_attendance')])
 def mark_attendance(request):
-    faculty = _get_faculty(request.user)
+    faculty = get_faculty_profile(request.user)
     if not faculty:
         return Response({'error': 'Only faculty can mark attendance.'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -100,6 +84,14 @@ def mark_attendance(request):
 
     if not section_id or not attendance_date:
         return Response({'error': 'section_id and attendance_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        section = Section.objects.get(section_id=section_id)
+    except Section.DoesNotExist:
+        return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.user.user_type == 'teacher' and not teacher_owns_section(request.user, section):
+        return Response({'error': 'You can only mark attendance for your own sections.'}, status=status.HTTP_403_FORBIDDEN)
 
     if not lecture_number:
         lecture_number = _next_lecture_number(section_id)
@@ -137,13 +129,13 @@ def mark_attendance(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminOrTeacher])
+@permission_classes([IsAuthenticated, require_any_permission('attendance.view_attendance', 'attendance.mark_attendance')])
 def list_attendance(request):
     section = request.query_params.get('section')
     semester = request.query_params.get('semester')
     qs = Attendance.objects.select_related('section__course', 'section__semester').all()
     if request.user.user_type == 'teacher':
-        faculty = _get_faculty(request.user)
+        faculty = get_faculty_profile(request.user)
         if faculty:
             qs = qs.filter(section__faculty=faculty)
     if section:
@@ -154,16 +146,28 @@ def list_attendance(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_any_permission('attendance.mark_attendance', 'attendance.view_attendance')])
 def next_lecture_number(request):
     section_id = request.query_params.get('section_id')
     if not section_id:
         return Response({'error': 'section_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        section = Section.objects.select_related('faculty').get(section_id=section_id)
+    except Section.DoesNotExist:
+        return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.user.user_type == 'teacher':
+        if not teacher_owns_section(request.user, section):
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+    elif not user_is_admin(request.user):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
     return Response({'lecture_number': _next_lecture_number(section_id)})
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, require_permission('attendance.view_own_attendance')])
 def my_attendance_summary(request):
     if request.user.user_type != 'student':
         return Response({'error': 'Only students can access this.'}, status=status.HTTP_403_FORBIDDEN)
@@ -179,16 +183,68 @@ def my_attendance_summary(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('attendance.view_attendance')])
 def list_attendance_summaries(request):
     section = request.query_params.get('section')
     semester = request.query_params.get('semester')
     qs = StudentAttendanceSummary.objects.select_related('student', 'course', 'semester').all()
+    if request.user.user_type == 'teacher':
+        faculty = get_faculty_profile(request.user)
+        if faculty:
+            qs = qs.filter(section__faculty=faculty)
+        else:
+            qs = qs.none()
     if section:
         qs = qs.filter(section__section_id=section)
     if semester:
         qs = qs.filter(semester__semester_id=semester)
     return Response(StudentAttendanceSummarySerializer(qs, many=True).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, require_permission('attendance.view_attendance')])
+def export_attendance_report(request):
+    """CSV export of attendance summaries for HOD/dean reporting."""
+    import csv
+    from django.http import HttpResponse
+
+    section = request.query_params.get('section')
+    semester = request.query_params.get('semester')
+    qs = StudentAttendanceSummary.objects.select_related(
+        'student', 'course', 'semester', 'section',
+    ).all()
+    if request.user.user_type == 'teacher':
+        faculty = get_faculty_profile(request.user)
+        if faculty:
+            qs = qs.filter(section__faculty=faculty)
+        else:
+            qs = qs.none()
+    if section:
+        qs = qs.filter(section__section_id=section)
+    if semester:
+        qs = qs.filter(semester__semester_id=semester)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="attendance_report.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'Registration No', 'Course', 'Section', 'Semester',
+        'Total Lectures', 'Attended', 'Late', 'Leave', 'Percentage', 'Below 75%',
+    ])
+    for s in qs:
+        writer.writerow([
+            s.student.registration_number,
+            s.course.course_code,
+            s.section.section_name if s.section_id else '',
+            s.semester.semester_name,
+            s.total_lectures,
+            s.attended_lectures,
+            s.late_count,
+            s.leave_count,
+            f'{s.attendance_percentage:.1f}',
+            'Yes' if s.is_below_threshold else 'No',
+        ])
+    return response
 
 
 # ── Leave Applications ────────────────────────────────────────
@@ -240,9 +296,9 @@ def delete_leave(request, leave_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminOrTeacher])
+@permission_classes([IsAuthenticated, require_permission('attendance.mark_attendance')])
 def teacher_leaves(request):
-    faculty = _get_faculty(request.user)
+    faculty = get_faculty_profile(request.user)
     if not faculty and request.user.user_type != 'admin':
         return Response({'error': 'Faculty profile required.'}, status=status.HTTP_403_FORBIDDEN)
     qs = LeaveApplication.objects.select_related('student__user', 'section__course').filter(status='pending')
@@ -252,14 +308,14 @@ def teacher_leaves(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminOrTeacher])
+@permission_classes([IsAuthenticated, require_permission('attendance.mark_attendance')])
 def review_leave(request, leave_id):
     try:
         leave = LeaveApplication.objects.select_related('section', 'student').get(leave_id=leave_id)
     except LeaveApplication.DoesNotExist:
         return Response({'error': 'Leave application not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    faculty = _get_faculty(request.user)
+    faculty = get_faculty_profile(request.user)
     if request.user.user_type == 'teacher':
         if not faculty or leave.section.faculty_id != faculty.faculty_id:
             return Response({'error': 'You can only review leaves for your sections.'}, status=status.HTTP_403_FORBIDDEN)
@@ -277,31 +333,40 @@ def review_leave(request, leave_id):
     leave.reviewed_at = timezone.now()
     leave.save()
 
-    if action == 'approved' and faculty:
+    if action == 'approved':
         from datetime import timedelta
+        marker = faculty or leave.section.faculty
+        reg = CourseRegistration.objects.filter(
+            student=leave.student, section=leave.section, status='registered',
+        ).first()
         current = leave.start_date
         while current <= leave.end_date:
+            for att in Attendance.objects.filter(section=leave.section, attendance_date=current):
+                if reg:
+                    record, _ = AttendanceRecord.objects.get_or_create(
+                        attendance=att,
+                        student=leave.student,
+                        defaults={'registration': reg, 'status': 'leave', 'remarks': 'Approved leave'},
+                    )
+                    if record.status != 'leave':
+                        record.status = 'leave'
+                        record.remarks = 'Approved leave application'
+                        record.save(update_fields=['status', 'remarks'])
+                        _update_summary(record)
             lec_num = _next_lecture_number(leave.section_id)
             att, att_created = Attendance.objects.get_or_create(
                 section=leave.section,
                 attendance_date=current,
                 lecture_number=lec_num,
-                defaults={'marked_by': faculty, 'topic_covered': f'Approved leave: {leave.reason[:100]}'}
+                defaults={'marked_by': marker, 'topic_covered': f'Approved leave: {leave.reason[:100]}'}
             )
-            if att_created:
-                reg = CourseRegistration.objects.filter(
-                    student=leave.student, section=leave.section, status='registered'
-                ).first()
-                if reg:
-                    record, _ = AttendanceRecord.objects.get_or_create(
-                        attendance=att,
-                        student=leave.student,
-                        defaults={'registration': reg, 'status': 'leave', 'remarks': 'Approved leave application'}
-                    )
-                    if record.status != 'leave':
-                        record.status = 'leave'
-                        record.save(update_fields=['status'])
-                        _update_summary(record)
+            if att_created and reg:
+                record, _ = AttendanceRecord.objects.get_or_create(
+                    attendance=att,
+                    student=leave.student,
+                    defaults={'registration': reg, 'status': 'leave', 'remarks': 'Approved leave application'}
+                )
+                _update_summary(record)
             current += timedelta(days=1)
 
     return Response(LeaveApplicationSerializer(leave).data)

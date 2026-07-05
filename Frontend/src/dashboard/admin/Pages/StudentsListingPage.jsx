@@ -3,8 +3,12 @@ import { useAuth } from '../../../context/AuthContext';
 import { listStudents, getStudent } from '../../../services/studentsService';
 import { listDepartments, listPrograms } from '../../../services/academicsService';
 import { normalizeList } from '../../../services/api';
-import { PageHeader, useTableFilter, TablePagination, LoadingSpinner, EmptyRow, useToast, getStatusBadgeClass } from '../../shared/helpers';
+import { PageHeader, useTableFilter, TablePagination, LoadingSpinner, EmptyRow, useToast, getStatusBadgeClass, formatDate } from '../../shared/helpers';
 import { UserIcon, XIcon } from '../../Icons';
+
+const ProfileField = ({ label, value }) => (
+    <p><strong>{label}:</strong> {value ?? '—'}</p>
+);
 
 const StudentsListingPage = () => {
     const { token } = useAuth();
@@ -54,6 +58,7 @@ const StudentsListingPage = () => {
 
     const openDetail = async (student) => {
         setDetailLoading(true);
+        setDetail(null);
         try {
             const d = await getStudent(student.student_id, token);
             setDetail(d);
@@ -65,6 +70,8 @@ const StudentsListingPage = () => {
     };
 
     if (loading) return <LoadingSpinner message="Loading students..." />;
+
+    const profile = detail?.profile;
 
     return (
         <div className="page-container fade-in">
@@ -95,7 +102,7 @@ const StudentsListingPage = () => {
                 <div className="data-table-wrapper">
                     <table className="data-table">
                         <thead>
-                            <tr><th>Sr#</th><th>Reg No</th><th>Name</th><th>Program</th><th>Semester</th><th>Batch</th><th>Status</th><th>Action</th></tr>
+                            <tr><th>Sr#</th><th>Registration No.</th><th>Name</th><th>Program</th><th>Semester</th><th>Batch</th><th>Status</th><th>Action</th></tr>
                         </thead>
                         <tbody>
                             {paginated.length === 0 ? (
@@ -103,13 +110,13 @@ const StudentsListingPage = () => {
                             ) : paginated.map((item, i) => (
                                 <tr key={item.student_id}>
                                     <td>{(page - 1) * pageSize + i + 1}</td>
-                                    <td><span className="app-number">{item.registration_number}</span></td>
+                                    <td><span className="app-number" style={{ fontWeight: 600 }}>{item.registration_number || '—'}</span></td>
                                     <td>{item.username || '—'}</td>
                                     <td>{item.program_name || '—'}</td>
                                     <td>{item.current_semester || 1}</td>
                                     <td>{item.batch_year || '—'}</td>
                                     <td><span className={getStatusBadgeClass(item.status)}>{item.status?.toUpperCase() || 'ACTIVE'}</span></td>
-                                    <td><button className="action-btn" onClick={() => openDetail(item)}>View</button></td>
+                                    <td><button className="action-btn view-btn" onClick={() => openDetail(item)}>View Profile</button></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -120,28 +127,77 @@ const StudentsListingPage = () => {
 
             {(detail || detailLoading) && (
                 <div className="modal-overlay" onClick={() => setDetail(null)}>
-                    <div className="glass-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '720px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
+                    <div className="glass-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '780px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div className="modal-header">
-                            <h3>Student Details</h3>
+                            <div>
+                                <h3>Student Profile</h3>
+                                {detail?.registration_number && (
+                                    <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                                        Registration No.: <span className="app-number" style={{ fontWeight: 700 }}>{detail.registration_number}</span>
+                                    </p>
+                                )}
+                            </div>
                             <button className="close-btn" onClick={() => setDetail(null)}><XIcon /></button>
                         </div>
                         <div className="modal-body">
                             {detailLoading ? <LoadingSpinner message="Loading..." /> : detail ? (
                                 <>
-                                    <p><strong>Registration:</strong> {detail.registration_number}</p>
-                                    <p><strong>Name:</strong> {detail.username}</p>
-                                    <p><strong>Program:</strong> {detail.program_name}</p>
-                                    <p><strong>Semester:</strong> {detail.current_semester}</p>
-                                    <p><strong>Batch:</strong> {detail.batch_year}</p>
-                                    {detail.applicant_profile && (<>
-                                        <h4 style={{ marginTop: '16px' }}>Applicant Profile</h4>
-                                        <p>{detail.applicant_profile.first_name} {detail.applicant_profile.last_name} — {detail.applicant_profile.email}</p>
+                                    <h4 style={{ marginBottom: '8px' }}>Academic Information</h4>
+                                    <div style={{ display: 'grid', gap: '6px', marginBottom: '16px' }}>
+                                        <ProfileField label="Registration No." value={detail.registration_number} />
+                                        <ProfileField label="Name" value={detail.username} />
+                                        <ProfileField label="Email" value={detail.email} />
+                                        <ProfileField label="Department" value={detail.department_name} />
+                                        <ProfileField label="Program" value={detail.program_name} />
+                                        <ProfileField label="Semester" value={detail.current_semester} />
+                                        <ProfileField label="Batch" value={detail.batch_year} />
+                                        <ProfileField label="CGPA" value={detail.cgpa} />
+                                        <ProfileField label="Credit Hours" value={detail.total_credit_hours_completed} />
+                                        <ProfileField label="Admission Date" value={formatDate(detail.admission_date)} />
+                                        <ProfileField label="Status" value={detail.status?.toUpperCase()} />
+                                    </div>
+
+                                    {profile && (<>
+                                        <h4 style={{ marginBottom: '8px' }}>Student Profile</h4>
+                                        <div style={{ display: 'grid', gap: '6px', marginBottom: '16px' }}>
+                                            <ProfileField label="Blood Group" value={profile.blood_group} />
+                                            <ProfileField label="Medical Conditions" value={profile.medical_conditions} />
+                                            <ProfileField label="Disabilities" value={profile.disabilities} />
+                                            <ProfileField label="Guardian Phone" value={profile.guardian_phone} />
+                                            <ProfileField label="Guardian Occupation" value={profile.guardian_occupation} />
+                                            <ProfileField label="Residential Address" value={profile.residential_address} />
+                                            <ProfileField label="Permanent Address" value={profile.permanent_address} />
+                                        </div>
                                     </>)}
+
+                                    {detail.applicant_profile && (<>
+                                        <h4 style={{ marginBottom: '8px' }}>Applicant Details</h4>
+                                        <div style={{ display: 'grid', gap: '6px', marginBottom: '16px' }}>
+                                            <ProfileField label="Full Name" value={`${detail.applicant_profile.first_name || ''} ${detail.applicant_profile.last_name || ''}`.trim()} />
+                                            <ProfileField label="CNIC" value={detail.applicant_profile.cnic} />
+                                            <ProfileField label="Phone" value={detail.applicant_profile.phone} />
+                                            <ProfileField label="Email" value={detail.applicant_profile.email} />
+                                        </div>
+                                    </>)}
+
+                                    {detail.academic_records?.length > 0 && (<>
+                                        <h4 style={{ marginBottom: '8px' }}>Academic Records</h4>
+                                        <ul style={{ marginBottom: '16px' }}>
+                                            {detail.academic_records.map((r, idx) => (
+                                                <li key={r.record_id || idx}>
+                                                    {r.degree_level || r.qualification}: {r.institution_name} — {r.obtained_marks}/{r.total_marks}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </>)}
+
                                     {detail.applicant_documents?.length > 0 && (<>
-                                        <h4 style={{ marginTop: '16px' }}>Submitted Documents</h4>
-                                        <ul>{detail.applicant_documents.map(d => (
-                                            <li key={d.document_id}>{d.document_type_display || d.document_type}: {d.file_name}</li>
-                                        ))}</ul>
+                                        <h4 style={{ marginBottom: '8px' }}>Submitted Documents</h4>
+                                        <ul>
+                                            {detail.applicant_documents.map(d => (
+                                                <li key={d.document_id}>{d.document_type_display || d.document_type}: {d.file_name}</li>
+                                            ))}
+                                        </ul>
                                     </>)}
                                 </>
                             ) : null}

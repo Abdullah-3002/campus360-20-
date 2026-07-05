@@ -31,7 +31,7 @@ class ComplaintSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complaint
         fields = '__all__'
-        read_only_fields = ['complaint_id', 'submitted_at', 'submitted_by']
+        read_only_fields = ['complaint_id', 'submitted_at', 'submitted_by', 'status', 'admin_response', 'resolved_at']
 
 
 class MessageSerializer(serializers.ModelSerializer):

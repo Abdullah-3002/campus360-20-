@@ -1,6 +1,7 @@
 // src/dashboard/Pages/ChangePasswordPage.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
+import { changePassword } from '../../../services/authService';
 import { LockIcon, EyeIcon, EyeOffIcon, CheckIcon } from '../../Icons';
 import { isValidPassword, getPasswordError } from '../../../utils/validation';
 import PasswordValidation from '../../../components/PasswordValidation';
@@ -87,15 +88,17 @@ const ChangePasswordPage = () => {
         
         setIsSubmitting(true);
         try {
-            // API call to change password would go here
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await changePassword(formData.currentPassword, formData.newPassword, token);
             setSuccess(true);
             setFormData({ currentPassword: '', newPassword: '', confirmPassword: '' });
             setTouched({});
-            setTimeout(() => setSuccess(false), 3000);
+            setTimeout(() => setSuccess(false), 5000);
         } catch (error) {
-            console.error('Password change failed:', error);
-            alert('Failed to change password. Please try again.');
+            const msg = error.response?.data?.error
+                || error.response?.data?.old_password?.[0]
+                || error.response?.data?.new_password?.[0]
+                || 'Failed to change password. Please try again.';
+            alert(msg);
         } finally {
             setIsSubmitting(false);
         }
@@ -129,7 +132,6 @@ const ChangePasswordPage = () => {
                 <div className="field-group">
                     <label className="field-label">Current Password <span className="required">*</span></label>
                     <div className="input-wrapper">
-                        <div className="input-icon"><LockIcon /></div>
                         <input 
                             type={showCurrentPassword ? "text" : "password"}
                             name="currentPassword"
@@ -150,7 +152,6 @@ const ChangePasswordPage = () => {
                 <div className="field-group">
                     <label className="field-label">New Password <span className="required">*</span></label>
                     <div className="input-wrapper">
-                        <div className="input-icon"><LockIcon /></div>
                         <input 
                             type={showNewPassword ? "text" : "password"}
                             name="newPassword"
@@ -176,7 +177,6 @@ const ChangePasswordPage = () => {
                 <div className="field-group">
                     <label className="field-label">Confirm New Password <span className="required">*</span></label>
                     <div className="input-wrapper">
-                        <div className="input-icon"><LockIcon /></div>
                         <input 
                             type={showConfirmPassword ? "text" : "password"}
                             name="confirmPassword"

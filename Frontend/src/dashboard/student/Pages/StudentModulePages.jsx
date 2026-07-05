@@ -4,7 +4,7 @@ import { myEnrollments } from '../../../services/enrollmentsService';
 import { myFinalGrades, myResults } from '../../../services/examinationsService';
 import { myAttendanceSummary, submitLeave, myLeaves, deleteLeave } from '../../../services/attendanceService';
 import { myChallans } from '../../../services/feesService';
-import { myComplaints, submitComplaint, listCategories, deleteComplaint, getComplaint } from '../../../services/complaintsService';
+import { myComplaints, submitComplaint, listCategories, deleteComplaint, getComplaint, submitFeedback } from '../../../services/complaintsService';
 import { listNotifications, markNotificationRead, listAnnouncements } from '../../../services/notificationsService';
 import { normalizeList } from '../../../services/api';
 import { PageHeader, useTableFilter, TablePagination, LoadingSpinner, EmptyRow, useToast, formatDate, getStatusBadgeClass } from '../../shared/helpers';
@@ -32,6 +32,9 @@ export const MyEnrollmentsPage = () => {
     return (
         <div className="page-container fade-in">
             <PageHeader breadcrumb="DASHBOARD > ENROLLMENTS" title="My Enrollments" />
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 12 }}>
+                Courses are assigned automatically when you are admitted and after each semester result is published. You do not register courses manually.
+            </p>
             <div className="form-card">
                 <div className="table-toolbar"><div className="table-search search-bar" style={{ maxWidth: 360 }}><input className="search-input" placeholder="Search..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div></div>
                 <div className="data-table-wrapper">
@@ -218,6 +221,7 @@ export const MyComplaintsPage = () => {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [selectedComplaint, setSelectedComplaint] = useState(null);
+    const [feedbackForm, setFeedbackForm] = useState({ rating: 5, comments: '' });
     const [formData, setFormData] = useState({ subject: '', description: '', category: '' });
     const load = () => myComplaints(token).then(d => setItems(normalizeList(d)));
     useEffect(() => {
@@ -315,6 +319,25 @@ export const MyComplaintsPage = () => {
                                 <p style={{ marginTop: '16px' }}><strong>Admin Response:</strong></p>
                                 <p style={{ color: 'var(--text-secondary)', padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px' }}>{selectedComplaint.admin_response}</p>
                             </>
+                        )}
+                        {['resolved', 'closed'].includes(selectedComplaint.status) && (
+                            <div style={{ marginTop: 16 }}>
+                                <p><strong>Rate this resolution</strong></p>
+                                <div className="field-group">
+                                    <label className="field-label">Rating (1–5)</label>
+                                    <input type="number" min={1} max={5} className="field-input" style={{ maxWidth: 80 }} value={feedbackForm.rating} onChange={e => setFeedbackForm({ ...feedbackForm, rating: parseInt(e.target.value, 10) })} />
+                                </div>
+                                <div className="field-group">
+                                    <label className="field-label">Comments</label>
+                                    <textarea className="field-input field-textarea" value={feedbackForm.comments} onChange={e => setFeedbackForm({ ...feedbackForm, comments: e.target.value })} />
+                                </div>
+                                <button className="btn-primary" onClick={async () => {
+                                    try {
+                                        await submitFeedback(selectedComplaint.complaint_id, feedbackForm, token);
+                                        showToast('Feedback submitted');
+                                    } catch (e) { alert(e.response?.data?.error || 'Failed to submit feedback'); }
+                                }}>Submit Feedback</button>
+                            </div>
                         )}
                     </div>
                 </div></div>

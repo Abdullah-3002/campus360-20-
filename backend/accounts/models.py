@@ -34,7 +34,6 @@ class User(AbstractBaseUser,PermissionsMixin):
     USER_TYPE_CHOICES = [
         ('student', 'Student'),
         ('teacher', 'Teacher'),
-        ('staff', 'Staff'),
         ('admin', 'Admin'),
         ('applicant', 'Applicant'),
     ]

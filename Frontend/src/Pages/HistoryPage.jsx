@@ -1,12 +1,15 @@
 // src/pages/HistoryPage.jsx
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
-const HistoryPage = ({ setView }) => {
+const HistoryPage = () => {
+    const navigate = useNavigate();
+
     return (
         <div style={{ background: 'var(--white)', minHeight: '100vh', paddingTop: '100px' }}>
-            <Navbar setView={setView} currentView="history" />
+            <Navbar />
             <section className="section">
                 <div className="container" style={{ maxWidth: '900px' }}>
                     <div className="fade-in">
@@ -25,12 +28,12 @@ const HistoryPage = ({ setView }) => {
                                 The university's evolution is intricately tied to Sialkot's cultural and industrial significance. Known for its innovation, creativity, and as the birthplace of the great poet-philosopher Muhammad Iqbal, Sialkot provided a fertile environment for USKT to flourish. The university's development complements the city's dynamic character, serving as an educational beacon for students and professionals from across the country and beyond.
                             </p>
                             
-                            <button onClick={() => setView('landing')} className="btn btn-primary">Back to Home</button>
+                            <button onClick={() => navigate('/')} className="btn btn-primary">Back to Home</button>
                         </div>
                     </div>
                 </div>
             </section>
-            <Footer setView={setView} />
+            <Footer />
         </div>
     );
 };

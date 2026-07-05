@@ -1,12 +1,16 @@
 // src/pages/LoginPage.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginUser } from '../services/authService';
+import { loginRedirectPath } from '../routes/paths';
 import { LockIcon, EyeIcon, EyeOffIcon, MailIcon } from '../Icons';
 import PasswordValidation from '../components/PasswordValidation';
 import { isValidEmail } from '../utils/validation';
 
-const LoginPage = ({ setView }) => {
+const LoginPage = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [errors, setErrors] = useState({});
     const [touched, setTouched] = useState({});
@@ -92,23 +96,31 @@ const LoginPage = ({ setView }) => {
         setLoading(true);
         
         try {
-            // Check for mock user (for development/testing)
-            const mockUserStr = localStorage.getItem('mockUser');
-            if (mockUserStr) {
-                const mockUser = JSON.parse(mockUserStr);
-                const emailMatches = mockUser.email === formData.email || 
-                                    mockUser.email.split('@')[0] === formData.email;
-                if (emailMatches && mockUser.password === formData.password) {
-                    if (login) login({ id: mockUser.name, name: mockUser.name }, "mock-token");
-                    setLoading(false);
-                    return;
+            // Dev-only mock login (never enabled in production builds)
+            if (import.meta.env.DEV) {
+                const mockUserStr = localStorage.getItem('mockUser');
+                if (mockUserStr) {
+                    const mockUser = JSON.parse(mockUserStr);
+                    const emailMatches = mockUser.email === formData.email ||
+                                        mockUser.email.split('@')[0] === formData.email;
+                    if (emailMatches && mockUser.password === formData.password) {
+                        const mockUserData = {
+                            user_id: mockUser.user_id || mockUser.name,
+                            username: mockUser.username || mockUser.name,
+                            user_type: mockUser.user_type || 'applicant',
+                        };
+                        if (login) login(mockUserData, 'mock-token');
+                        navigate(loginRedirectPath(mockUserData.user_type, location.state?.from));
+                        setLoading(false);
+                        return;
+                    }
                 }
             }
 
             // Actual API login
             const data = await loginUser(formData.email, formData.password);
             if (login) login(data.user, data.token);
-            setView('dashboard');
+            navigate(loginRedirectPath(data.user.user_type, location.state?.from));
             return;
             
         } catch (error) {
@@ -227,7 +239,7 @@ const LoginPage = ({ setView }) => {
                                     <button 
                                         type="button"
                                         className="forgot-password-link"
-                                        onClick={() => setView('forgot-password')}
+                                        onClick={() => navigate('/forgot-password')}
                                         disabled={loading}
                                     >
                                         Forgot Password?
@@ -264,7 +276,7 @@ const LoginPage = ({ setView }) => {
                                 <button 
                                     type="button"
                                     className="link-btn"
-                                    onClick={() => setView('signup')}
+                                    onClick={() => navigate('/signup')}
                                 >
                                     Register Now
                                 </button>
@@ -274,7 +286,7 @@ const LoginPage = ({ setView }) => {
                             <button 
                                 type="button"
                                 className="back-home-btn"
-                                onClick={() => setView('landing')}
+                                onClick={() => navigate('/')}
                             >
                                 ← Back to Home
                             </button>

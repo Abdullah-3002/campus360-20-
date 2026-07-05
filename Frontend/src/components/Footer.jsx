@@ -1,7 +1,8 @@
 // src/components/Footer.jsx
 import React from 'react';
+import { Link } from 'react-router-dom';
 
-const Footer = ({ setView }) => {
+const Footer = () => {
     return (
         <footer id="footer" className="footer">
             <div className="container">
@@ -18,7 +19,7 @@ const Footer = ({ setView }) => {
                     <div className="footer-col">
                         <h4>About University</h4>
                         <ul className="footer-links">
-                            <li><a href="#" onClick={(e) => { e.preventDefault(); setView('landing'); window.scrollTo(0,0); }}>Home</a></li>
+                            <li><Link to="/" onClick={() => window.scrollTo(0, 0)}>Home</Link></li>
                             <li><a href="#" onClick={(e) => { e.preventDefault(); alert("Programs coming soon!"); }}>Undergraduate Programs</a></li>
                             <li><a href="#" onClick={(e) => { e.preventDefault(); alert("Programs coming soon!"); }}>Postgraduate Programs</a></li>
                             <li><a href="#" onClick={(e) => { e.preventDefault(); alert("Structure coming soon!"); }}>Fee Structure</a></li>

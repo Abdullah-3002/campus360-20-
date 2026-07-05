@@ -103,6 +103,7 @@ class AdmissionApplication(models.Model):
     admission_challan_number = models.CharField(max_length=50, blank=True)
     admission_challan_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     challan_paid = models.BooleanField(default=False)
+    challan_rejected_at = models.DateTimeField(null=True, blank=True, help_text='Deadline anchor for re-upload after OCR/admin rejection')
     rejection_message = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)

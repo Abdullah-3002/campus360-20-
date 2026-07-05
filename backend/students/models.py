@@ -27,12 +27,30 @@ class Student(models.Model):
     status                       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     cgpa                         = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     total_credit_hours_completed = models.IntegerField(default=0)
-    section                      = models.CharField(max_length=50, blank=True, null=True)
+    batch_section                = models.ForeignKey(
+        'sections.BatchSection', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='students',
+    )
+    section                      = models.CharField(
+        max_length=50, blank=True, null=True,
+        help_text='Denormalized label from batch_section; kept for legacy reads.',
+    )
     created_at                   = models.DateTimeField(auto_now_add=True)
     updated_at                   = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'students_student'
+
+    def save(self, *args, **kwargs):
+        if self.batch_section_id:
+            self.section = self.batch_section.section_name
+        super().save(*args, **kwargs)
+
+    @property
+    def section_label(self):
+        if self.batch_section_id:
+            return self.batch_section.section_name
+        return self.section or ''
 
     def __str__(self):
         return f"{self.registration_number} — {self.user.username}"

@@ -1,10 +1,12 @@
 // src/dashboard/Pages/AcademicInformationPage.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { getAcademicRecords, getMyDocuments, deleteAcademicRecord } from '../../../services/admissionService';
 import { SearchIcon, PlusIcon, InfoIcon, TrashIcon } from '../../Icons';
 
 const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange, readOnly = false }) => {
+    const navigate = useNavigate();
     const { token } = useAuth();
     const [search, setSearch] = useState('');
     const [records, setRecords] = useState([]);
@@ -121,7 +123,7 @@ const AcademicInformationPage = ({ onAddClick, onAcademicRecordChange, readOnly 
                     </p>
                     <button 
                         className="btn-primary" 
-                        onClick={() => window.location.href = '#personal-docs'}
+                        onClick={() => navigate('/applicant/personal-docs')}
                         style={{ marginTop: '20px' }}
                     >
                         Go to Personal Documents

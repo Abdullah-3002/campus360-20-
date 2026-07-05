@@ -5,15 +5,18 @@ from rest_framework.response import Response
 from django.contrib.auth import logout as django_logout
 from django.utils import timezone
 from django.db import transaction
-from .models import User, LoginSession, PasswordReset, UserRole, Role
+from .models import User, LoginSession, PasswordReset, UserRole, Role, AuditLog, Permission, RolePermission
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserSerializer,
     RoleSerializer, LoginSessionSerializer, PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer, ChangePasswordSerializer
 )
-from .utils import generate_jwt_token, create_login_session, generate_password_reset_token
-from .permissions import IsAdmin
-from faculty.models import Faculty, Staff, EmployeeProfile, Designation
+from .utils import generate_jwt_token, create_login_session, generate_password_reset_token, decode_jwt_token
+from .permissions import IsAdmin, require_permission
+from .rbac import ensure_user_role_for_type, get_user_permission_names
+from .rbac_policy import validate_role_permission_update, PROTECTED_ROLE_NAME
+from .audit import log_audit
+from faculty.models import Faculty, EmployeeProfile, Designation
 from academics.models import Department, DegreeProgram
 import jwt
 from django.conf import settings
@@ -25,14 +28,18 @@ def register(request):
     serializer = UserRegistrationSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
+        ensure_user_role_for_type(user)
         
         # Auto-login after registration
-        token = generate_jwt_token(user)
         session = create_login_session(user, request)
+        token = generate_jwt_token(user, session.session_token)
         
         # Get user roles
         user_roles = UserRole.objects.filter(user=user).select_related('role')
         roles = [ur.role.role_name for ur in user_roles]
+        permissions = sorted(get_user_permission_names(user))
+        if '*' in permissions:
+            permissions = ['*']
         
         return Response({
             'message': 'Registration successful',
@@ -41,10 +48,12 @@ def register(request):
                 'username': user.username,
                 'email': user.email,
                 'user_type': user.user_type,
-                'roles': roles
+                'roles': roles,
+                'permissions': permissions,
             },
             'token': token,
-            'session_id': session.session_id
+            'session_id': session.session_id,
+            'session_token': session.session_token,
         }, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -56,16 +65,17 @@ def login(request):
     serializer = UserLoginSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.validated_data['user']
+        ensure_user_role_for_type(user)
         
-        # Generate JWT token
-        token = generate_jwt_token(user)
-        
-        # Create login session
         session = create_login_session(user, request)
+        token = generate_jwt_token(user, session.session_token)
         
-        # Get user roles
+        # Get user roles and permissions
         user_roles = UserRole.objects.filter(user=user).select_related('role')
         roles = [ur.role.role_name for ur in user_roles]
+        permissions = sorted(get_user_permission_names(user))
+        if '*' in permissions:
+            permissions = ['*']
         
         return Response({
             'message': 'Login successful',
@@ -74,10 +84,12 @@ def login(request):
                 'username': user.username,
                 'email': user.email,
                 'user_type': user.user_type,
-                'roles': roles
+                'roles': roles,
+                'permissions': permissions,
             },
             'token': token,
             'session_id': session.session_id,
+            'session_token': session.session_token,
             'expires_in': '24 hours'
         }, status=status.HTTP_200_OK)
     
@@ -86,37 +98,42 @@ def login(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
-    """User logout endpoint"""
+    """User logout endpoint — revokes the JWT-bound login session."""
     try:
-        # Get the active session from header
-        session_token = request.headers.get('X-Session-Token')
+        auth_header = request.headers.get('Authorization', '')
+        sid = None
+        if auth_header.startswith('Bearer '):
+            payload = decode_jwt_token(auth_header[7:])
+            sid = payload.get('sid') if payload else None
+
+        session_token = request.headers.get('X-Session-Token') or sid
         if session_token:
-            session = LoginSession.objects.get(
+            LoginSession.objects.filter(
                 session_token=session_token,
                 user=request.user,
-                is_active=True
-            )
-            session.logout_time = timezone.now()
-            session.is_active = False
-            session.save()
-        
+                is_active=True,
+            ).update(is_active=False, logout_time=timezone.now())
+
         return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
-    except LoginSession.DoesNotExist:
+    except Exception:
         return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_current_user(request):
-    print(request.headers)
     """Get current authenticated user info"""
+    ensure_user_role_for_type(request.user)
     serializer = UserSerializer(request.user)
     
-    # Get user roles
     user_roles = UserRole.objects.filter(user=request.user).select_related('role')
     roles = [ur.role.role_name for ur in user_roles]
+    permissions = sorted(get_user_permission_names(request.user))
+    if '*' in permissions:
+        permissions = ['*']
     
     data = serializer.data
     data['roles'] = roles
+    data['permissions'] = permissions
     
     return Response(data)
 
@@ -134,9 +151,10 @@ def change_password(request):
         
         request.user.set_password(new_password)
         request.user.save()
-        
-        # Logout from all sessions after password change
-        LoginSession.objects.filter(user=request.user, is_active=True).update(is_active=False)
+
+        LoginSession.objects.filter(user=request.user, is_active=True).update(
+            is_active=False, logout_time=timezone.now()
+        )
         
         return Response({'message': 'Password changed successfully. Please login again.'})
     
@@ -149,22 +167,23 @@ def request_password_reset(request):
     serializer = PasswordResetRequestSerializer(data=request.data)
     if serializer.is_valid():
         email = serializer.validated_data['email']
-        user = User.objects.get(email=email)
-        
-        token, expires_at = generate_password_reset_token(user)
-        
-        # Here you would send an email with the reset link
-        # For development, we'll return the token
-        reset_link = f"http://localhost:3000/reset-password?token={token}"
-        
-        # TODO: Implement email sending
-        # send_reset_email(user.email, reset_link)
-        
+        user = User.objects.filter(email=email).first()
+
+        if user:
+            token, _expires_at = generate_password_reset_token(user)
+            reset_link = f"{request.build_absolute_uri('/').rstrip('/')}/reset-password?token={token}"
+            # TODO: send_reset_email(user.email, reset_link)
+            if settings.DEBUG:
+                return Response({
+                    'message': 'If an account exists for this email, a reset link has been sent.',
+                    'reset_link': reset_link,
+                    'reset_token': token,
+                }, status=status.HTTP_200_OK)
+
         return Response({
-            'message': 'Password reset link has been sent to your email',
-            'reset_token': token  # Only for development, remove in production
+            'message': 'If an account exists for this email, a reset link has been sent.',
         }, status=status.HTTP_200_OK)
-    
+
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -315,8 +334,7 @@ def get_user_roles(request, user_id=None):
     if user_id is None:
         target_user = request.user
     else:
-        # Only admin can view other users' roles
-        if request.user.user_type != 'admin':
+        if not IsAdmin().has_permission(request, None):
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
         try:
             target_user = User.objects.get(user_id=user_id)
@@ -384,7 +402,6 @@ def change_user_type(request):
     role_name_map = {
         'student': 'Student',
         'teacher': 'Teacher',
-        'staff': 'Staff',
         'admin': 'Admin',
         'applicant': 'Applicant',
     }
@@ -407,11 +424,11 @@ def change_user_type(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdmin])
+@permission_classes([IsAuthenticated, require_permission('accounts.create_credentials')])
 def create_user_credentials(request):
     """
-    Admin endpoint to create user credentials and set role (teacher, staff, admin).
-    For teacher/staff, auto-populates Faculty/Staff record and EmployeeProfile.
+    Admin endpoint to create user credentials and set role (teacher or admin).
+    For teachers, auto-populates Faculty record and EmployeeProfile.
     """
     username = request.data.get('username')
     email = request.data.get('email')
@@ -421,8 +438,8 @@ def create_user_credentials(request):
     if not username or not email or not password or not user_type:
         return Response({'error': 'username, email, password, and user_type/role are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if user_type not in ['admin', 'teacher', 'staff']:
-        return Response({'error': 'user_type must be admin, teacher, or staff.'}, status=status.HTTP_400_BAD_REQUEST)
+    if user_type not in ['admin', 'teacher']:
+        return Response({'error': 'user_type must be admin or teacher.'}, status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(username=username).exists():
         return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -451,28 +468,16 @@ def create_user_credentials(request):
             user_type=user_type
         )
 
-        role_map = {'admin': 'Admin', 'teacher': 'Teacher', 'staff': 'Staff'}
+        role_map = {'admin': 'Admin', 'teacher': 'Teacher'}
         role_obj, _ = Role.objects.get_or_create(role_name=role_map[user_type])
         UserRole.objects.create(user=user, role=role_obj, assigned_by=request.user)
 
-        if user_type in ['teacher', 'staff']:
+        if user_type == 'teacher':
             dept_id = request.data.get('department_id')
             prog_id = request.data.get('program_id')
             desig_id = request.data.get('designation_id')
-
-            if user_type == 'teacher':
-                department = Department.objects.get(department_id=dept_id)
-                program = DegreeProgram.objects.get(program_id=prog_id, department=department)
-            else:
-                department = Department.objects.filter(department_id=dept_id).first() if dept_id else None
-                program = None
-                if not department:
-                    department = Department.objects.first()
-                    if not department:
-                        department = Department.objects.create(
-                            department_name='General Academic Department',
-                            department_code='GEN'
-                        )
+            department = Department.objects.get(department_id=dept_id)
+            program = DegreeProgram.objects.get(program_id=prog_id, department=department)
 
             designation = None
             if desig_id:
@@ -480,8 +485,7 @@ def create_user_credentials(request):
             if not designation:
                 designation = Designation.objects.first()
                 if not designation:
-                    default_title = 'Lecturer' if user_type == 'teacher' else 'Officer'
-                    designation = Designation.objects.create(designation_title=default_title)
+                    designation = Designation.objects.create(designation_title='Lecturer')
 
             emp_type = request.data.get('employment_type', 'permanent')
             emp_status = request.data.get('status', 'active')
@@ -498,60 +502,38 @@ def create_user_credentials(request):
             curr_addr = request.data.get('current_address') or 'N/A'
             perm_addr = request.data.get('permanent_address') or curr_addr
 
-            if user_type == 'teacher':
-                count = Faculty.objects.count()
-                emp_code = f"FAC-{year}-{str(count + 1).zfill(4)}"
-                qual = request.data.get('qualification', 'Master')
-                fac_obj = Faculty.objects.create(
-                    user=user,
-                    department=department,
-                    program=program,
-                    designation=designation,
-                    employee_code=emp_code,
-                    qualification=qual,
-                    joining_date=joining_date,
-                    employment_type=emp_type,
-                    status=emp_status,
-                    profile_completed=False,
-                )
-                EmployeeProfile.objects.create(
-                    employee_id=fac_obj.faculty_id,
-                    employee_type='faculty',
-                    cnic=cnic if not EmployeeProfile.objects.filter(cnic=cnic).exists() else f"{cnic[:9]}{count+1:04d}",
-                    date_of_birth=dob,
-                    gender=gender,
-                    phone_number=phone,
-                    emergency_contact_name=em_name,
-                    emergency_contact_phone=em_phone,
-                    emergency_contact_relation=em_rel,
-                    current_address=curr_addr,
-                    permanent_address=perm_addr,
-                )
-            else:
-                count = Staff.objects.count()
-                emp_code = f"STF-{year}-{str(count + 1).zfill(4)}"
-                stf_obj = Staff.objects.create(
-                    user=user,
-                    department=department,
-                    designation=designation,
-                    employee_code=emp_code,
-                    joining_date=joining_date,
-                    employment_type=emp_type,
-                    status=emp_status,
-                )
-                EmployeeProfile.objects.create(
-                    employee_id=stf_obj.staff_id,
-                    employee_type='staff',
-                    cnic=cnic if not EmployeeProfile.objects.filter(cnic=cnic).exists() else f"{cnic[:9]}{count+1:04d}",
-                    date_of_birth=dob,
-                    gender=gender,
-                    phone_number=phone,
-                    emergency_contact_name=em_name,
-                    emergency_contact_phone=em_phone,
-                    emergency_contact_relation=em_rel,
-                    current_address=curr_addr,
-                    permanent_address=perm_addr,
-                )
+            count = Faculty.objects.count()
+            emp_code = f"FAC-{year}-{str(count + 1).zfill(4)}"
+            qual = request.data.get('qualification', 'Master')
+            fac_obj = Faculty.objects.create(
+                user=user,
+                department=department,
+                program=program,
+                designation=designation,
+                employee_code=emp_code,
+                qualification=qual,
+                joining_date=joining_date,
+                employment_type=emp_type if emp_type in ('permanent', 'visiting', 'contract', 'contractual') else 'permanent',
+                status=emp_status,
+                office_floor=str(request.data.get('office_floor', '')).strip(),
+                office_hours=str(request.data.get('office_hours', '')).strip(),
+                profile_completed=False,
+            )
+            EmployeeProfile.objects.create(
+                employee_id=fac_obj.faculty_id,
+                employee_type='faculty',
+                cnic=cnic if not EmployeeProfile.objects.filter(cnic=cnic).exists() else f"{cnic[:9]}{count+1:04d}",
+                date_of_birth=dob,
+                gender=gender,
+                phone_number=phone,
+                emergency_contact_name=em_name,
+                emergency_contact_phone=em_phone,
+                emergency_contact_relation=em_rel,
+                current_address=curr_addr,
+                permanent_address=perm_addr,
+            )
+
+    log_audit(request, 'create_credentials', 'user', user.user_id, new_value={'user_type': user_type})
 
     return Response({
         'message': f'User credentials created successfully with role {user_type}.',
@@ -560,3 +542,127 @@ def create_user_credentials(request):
         'email': user.email,
         'user_type': user.user_type,
     }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, require_permission('system.view_audit_log')])
+def list_audit_logs(request):
+    from .serializers import AuditLogSerializer
+    logs = AuditLog.objects.select_related('user').order_by('-created_at')[:500]
+    table = request.query_params.get('table')
+    if table:
+        logs = logs.filter(table_name=table)
+    return Response(AuditLogSerializer(logs, many=True).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def list_app_permissions(request):
+    from .serializers import PermissionSerializer
+    perms = Permission.objects.all().order_by('module_name', 'permission_name')
+    return Response(PermissionSerializer(perms, many=True).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def list_role_permissions(request):
+    role_id = request.query_params.get('role_id')
+    qs = RolePermission.objects.select_related('role', 'permission')
+    if role_id:
+        qs = qs.filter(role_id=role_id)
+    data = [{
+        'role_id': rp.role.role_id,
+        'role': rp.role.role_name,
+        'permission_id': rp.permission.permission_id,
+        'permission': rp.permission.permission_name,
+        'module': rp.permission.module_name,
+    } for rp in qs]
+    return Response(data)
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated, require_permission('system.manage_role_permissions')])
+def role_permissions_detail(request, role_id):
+    """
+    GET: permissions assigned to a role.
+    PUT: replace role permissions (Teacher, Student, Applicant only).
+    """
+    try:
+        role = Role.objects.get(role_id=role_id)
+    except Role.DoesNotExist:
+        return Response({'error': 'Role not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        if role.role_name == PROTECTED_ROLE_NAME:
+            perms = Permission.objects.all().order_by('module_name', 'permission_name')
+            return Response({
+                'role_id': role.role_id,
+                'role_name': role.role_name,
+                'editable': False,
+                'permissions': [{
+                    'permission_id': p.permission_id,
+                    'permission_name': p.permission_name,
+                    'module_name': p.module_name,
+                    'description': p.description,
+                } for p in perms],
+            })
+        assigned = RolePermission.objects.filter(role=role).select_related('permission')
+        return Response({
+            'role_id': role.role_id,
+            'role_name': role.role_name,
+            'editable': True,
+            'permissions': [{
+                'permission_id': rp.permission.permission_id,
+                'permission_name': rp.permission.permission_name,
+                'module_name': rp.permission.module_name,
+                'description': rp.permission.description,
+            } for rp in assigned],
+        })
+
+    permission_names = request.data.get('permission_names')
+    if not isinstance(permission_names, list):
+        return Response(
+            {'error': 'permission_names must be a list of permission name strings.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    ok, err = validate_role_permission_update(role, permission_names)
+    if not ok:
+        return Response({'error': err}, status=status.HTTP_400_BAD_REQUEST)
+
+    perm_objs = list(
+        Permission.objects.filter(permission_name__in=permission_names)
+    )
+    found_names = {p.permission_name for p in perm_objs}
+    unknown = set(permission_names) - found_names
+    if unknown:
+        return Response(
+            {'error': f'Unknown permissions: {", ".join(sorted(unknown))}'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    old_names = sorted(
+        RolePermission.objects.filter(role=role)
+        .values_list('permission__permission_name', flat=True)
+    )
+
+    with transaction.atomic():
+        RolePermission.objects.filter(role=role).delete()
+        for perm in perm_objs:
+            RolePermission.objects.create(role=role, permission=perm)
+
+    log_audit(
+        request,
+        'update_role_permissions',
+        'role',
+        role.role_id,
+        old_value={'permissions': old_names},
+        new_value={'permissions': sorted(permission_names)},
+    )
+
+    return Response({
+        'message': f'Permissions updated for role {role.role_name}.',
+        'role_id': role.role_id,
+        'role_name': role.role_name,
+        'permission_count': len(perm_objs),
+    })

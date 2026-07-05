@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from accounts.permissions import IsAdmin
+from enrollments.models import CourseRegistration
 from .models import Student, StudentProfile
 from .serializers import StudentSerializer, StudentCreateSerializer, StudentProfileSerializer
 
@@ -72,6 +73,58 @@ def get_student(request, student_id):
             'email': student.user.email,
         }
     return Response(payload)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_degree_progress(request):
+    if request.user.user_type != 'student':
+        return Response({'error': 'Only students can access this.'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        student = Student.objects.select_related('program').get(user=request.user)
+    except Student.DoesNotExist:
+        return Response({'error': 'No student record found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    from academics.models import ProgramCourse
+    curriculum = ProgramCourse.objects.filter(program=student.program).select_related('course')
+    total_courses = curriculum.count()
+    total_credits = sum(pc.course.credit_hours for pc in curriculum)
+
+    completed_regs = CourseRegistration.objects.filter(
+        student=student, status='completed',
+    ).select_related('course')
+    completed_course_ids = set(completed_regs.values_list('course_id', flat=True))
+    completed_courses = len(completed_course_ids)
+    earned_credits = sum(r.course.credit_hours for r in completed_regs)
+
+    by_semester = {}
+    for pc in curriculum.order_by('semester_number'):
+        sem = pc.semester_number
+        if sem not in by_semester:
+            by_semester[sem] = {'total': 0, 'completed': 0, 'courses': []}
+        done = pc.course_id in completed_course_ids
+        by_semester[sem]['total'] += 1
+        if done:
+            by_semester[sem]['completed'] += 1
+        by_semester[sem]['courses'].append({
+            'course_code': pc.course.course_code,
+            'course_name': pc.course.course_name,
+            'credit_hours': pc.course.credit_hours,
+            'completed': done,
+        })
+
+    pct = round((earned_credits / total_credits) * 100, 1) if total_credits else 0
+    return Response({
+        'registration_number': student.registration_number,
+        'program': student.program.program_name,
+        'current_semester': student.current_semester,
+        'total_courses': total_courses,
+        'completed_courses': completed_courses,
+        'total_credit_hours': total_credits,
+        'earned_credit_hours': earned_credits,
+        'degree_completion_percent': pct,
+        'semester_breakdown': by_semester,
+    })
 
 
 @api_view(['POST'])

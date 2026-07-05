@@ -1,7 +1,7 @@
 // src/dashboard/Pages/AdmissionListingPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { getMyApplications, getApplicantProfile, getMyDocuments } from '../../../services/admissionService';
+import { getMyApplications, getApplicantProfile, getMyDocuments, deleteApplication as deleteApplicationApi } from '../../../services/admissionService';
 import { CheckIcon, AlertCircleIcon, PlusIcon, FileTextIcon, TrashIcon } from '../../Icons';
 
 const EyeIcon = ({ size = 16 }) => (
@@ -203,36 +203,19 @@ const loadChecklistStatus = async () => {
         }
     }, [token]);
 
-// src/dashboard/Pages/AdmissionListingPage.jsx - Updated deleteApplication function
-
-const deleteApplication = async (appId, appNumber) => {
-    if (!confirm(`Are you sure you want to delete application ${appNumber}? This action cannot be undone.`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`http://localhost:8000/api/admissions/application/${appId}/`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (response.ok) {
+    const handleDeleteApplication = async (appId, appNumber) => {
+        if (!confirm(`Are you sure you want to delete application ${appNumber}? This action cannot be undone.`)) {
+            return;
+        }
+        try {
+            await deleteApplicationApi(appId, token);
             alert('Application deleted successfully!');
-            // Refresh both applications and checklist status
             await loadApplications();
             await loadChecklistStatus();
-        } else {
-            const errorData = await response.json();
-            alert(errorData.error || 'Failed to delete application');
+        } catch (err) {
+            alert(err.response?.data?.error || 'Failed to delete application');
         }
-    } catch (error) {
-        console.error('Delete failed:', error);
-        alert('Failed to delete application. Please try again.');
-    }
-};
+    };
 
     const getStatusBadgeClass = (status) => {
         switch (status?.toLowerCase()) {
@@ -385,7 +368,7 @@ const deleteApplication = async (appId, appNumber) => {
                                                 {!readOnly && (
                                                 <button 
                                                     className="action-btn danger"
-                                                    onClick={() => deleteApplication(app.id, app.application_number)}
+                                                    onClick={() => handleDeleteApplication(app.id, app.application_number)}
                                                     title="Delete Application"
                                                 >
                                                     <TrashIcon size={16} />
